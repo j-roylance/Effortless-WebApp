@@ -10,7 +10,18 @@
   "functions": {
     "api/index.ts": {
       "maxDuration": 30,
-      "includeFiles": "server/prisma/**"
+      "memory": 1024,
+      "includeFiles": [
+        "server/prisma/**",
+        "server/node_modules/.prisma/**",
+        "server/node_modules/@prisma/client/**"
+      ]
     }
+  },
+  "outputFileTracingIncludes": {
+    "api/index.ts": [
+      "./server/node_modules/.prisma/**",
+      "./server/node_modules/@prisma/client/**"
+    ]
   }
 }

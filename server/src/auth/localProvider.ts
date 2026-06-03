@@ -1,4 +1,4 @@
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma.js";
 import type { AuthProvider, AuthUser } from "./providers.js";
 

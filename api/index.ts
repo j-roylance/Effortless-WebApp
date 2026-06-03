@@ -1,4 +1,4 @@
-import serverless from "serverless-http";
 import { app } from "../server/src/app.js";
 
-export default serverless(app);
+// Vercel Node runtime mounts Express apps exported as default
+export default app;

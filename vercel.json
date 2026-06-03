@@ -17,11 +17,5 @@
         "server/node_modules/@prisma/client/**"
       ]
     }
-  },
-  "outputFileTracingIncludes": {
-    "api/index.ts": [
-      "./server/node_modules/.prisma/**",
-      "./server/node_modules/@prisma/client/**"
-    ]
   }
 }

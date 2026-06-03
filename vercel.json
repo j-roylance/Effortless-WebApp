@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "cd server && npm install && npx prisma generate && cd ../client && npm install && cd ..",
+  "buildCommand": "cd server && npx prisma migrate deploy && cd ../client && npm run build",
+  "outputDirectory": "client/dist",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 30,
+      "includeFiles": "server/prisma/**"
+    }
+  }
+}

@@ -6,9 +6,15 @@ function required(name: string): string {
   return value;
 }
 
+function resolveClientUrl(): string {
+  if (process.env.CLIENT_URL) return process.env.CLIENT_URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:5173";
+}
+
 export const env = {
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: required("DATABASE_URL"),
   jwtSecret: required("JWT_SECRET"),
-  clientUrl: process.env.CLIENT_URL ?? "http://localhost:5173",
+  clientUrl: resolveClientUrl(),
 };

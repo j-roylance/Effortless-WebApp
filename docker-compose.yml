@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: effortless
+      POSTGRES_PASSWORD: effortless
+      POSTGRES_DB: effortless
+    volumes:
+      - effortless_pg:/var/lib/postgresql/data
+
+volumes:
+  effortless_pg:

@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RewardTier {
+  Bronze
+  Silver
+  Gold
+  Diamond
+  Platinum
+  Royal
+  King
+  Emperor
+  Planetary
+  Stellar
+  Galactic
+}
+
+enum SpinOutcome {
+  Win
+  LevelUp
+  NoReward
+  LevelDown
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  googleId     String?       @unique
+  createdAt    DateTime      @default(now())
+  habits       Habit[]
+  rewards      UserReward[]
+  tokens       RewardToken[]
+  spinLogs     SpinLog[]
+}
+
+model Habit {
+  id               String     @id @default(cuid())
+  userId           String
+  name             String
+  tier             RewardTier
+  persistAfterDone Boolean    @default(true)
+  sortOrder        Int        @default(0)
+  achievedAt       DateTime?
+  archivedAt       DateTime?
+  createdAt        DateTime   @default(now())
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserReward {
+  id        String     @id @default(cuid())
+  userId    String
+  tier      RewardTier
+  label     String
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, tier])
+}
+
+model RewardToken {
+  id        String     @id @default(cuid())
+  userId    String
+  tier      RewardTier
+  source    String
+  spentAt   DateTime?
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, tier])
+  @@index([userId, spentAt])
+}
+
+model SpinLog {
+  id            String      @id @default(cuid())
+  userId        String
+  tokenTier     RewardTier
+  outcome       SpinOutcome
+  effectiveTier RewardTier
+  rewardId      String?
+  createdAt     DateTime    @default(now())
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, effectiveTier, createdAt])
+}

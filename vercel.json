@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd server && npm install && npx prisma generate && cd ../client && npm install && cd ..",
+  "installCommand": "cd server && npm install --include=dev && npx prisma generate && cd ../client && npm install --include=dev",
   "buildCommand": "cd server && npx prisma migrate deploy && cd ../client && npm run build",
   "outputDirectory": "client/dist",
   "rewrites": [

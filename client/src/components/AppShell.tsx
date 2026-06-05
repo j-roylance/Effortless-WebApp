@@ -47,7 +47,7 @@ export function AppShell() {
         </NavLink>
       )}
 
-      <nav className="tab-bar tab-bar--five">
+      <nav className="tab-bar tab-bar--six">
         <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
           Tasks
         </NavLink>
@@ -62,6 +62,9 @@ export function AppShell() {
         </NavLink>
         <NavLink to="/visions" className={({ isActive }) => (isActive ? "active" : "")}>
           Vision
+        </NavLink>
+        <NavLink to="/ai" className={({ isActive }) => (isActive ? "active" : "")}>
+          AI
         </NavLink>
       </nav>
     </div>

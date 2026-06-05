@@ -983,6 +983,90 @@ h3,
   padding: 0.75rem 0.05rem;
 }
 
+.tab-bar--six a {
+  font-size: 0.38rem;
+  letter-spacing: 0.03em;
+  padding: 0.7rem 0.02rem;
+}
+
+.neon-textarea {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+  resize: vertical;
+  min-height: 5rem;
+}
+
+.neon-textarea:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 8px var(--cyan-dim);
+}
+
+.ai-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.ai-section {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.ai-section-title {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--cyan);
+}
+
+.ai-section-desc {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.ai-prompt-output {
+  margin-top: 0.5rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.ai-prompt-output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.ai-prompt-output-title {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.ai-prompt-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
 .vision-list {
   display: flex;
   flex-direction: column;

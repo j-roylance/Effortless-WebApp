@@ -20,6 +20,7 @@ import { DailySettingsPage } from "./pages/DailySettingsPage";
 import { VisionsPage } from "./pages/VisionsPage";
 import { VisionFormPage } from "./pages/VisionFormPage";
 import { VisionChainPage } from "./pages/VisionChainPage";
+import { AiPage } from "./pages/AiPage";
 
 export default function App() {
   return (
@@ -43,6 +44,7 @@ export default function App() {
               <Route path="/visions/new" element={<VisionFormPage />} />
               <Route path="/visions/:id/edit" element={<VisionFormPage />} />
               <Route path="/visions/:id/chain" element={<VisionChainPage />} />
+              <Route path="/ai" element={<AiPage />} />
             </Route>
           </Route>
 

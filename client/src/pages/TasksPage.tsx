@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Task, TokenBalances } from "../api/types";
 import {
   TASK_SECTIONS,
-  TASK_SECTION_COLOR,
   TASK_SECTION_LABEL,
   normalizeSection,
   type TaskSection,
@@ -47,16 +46,6 @@ export function TasksPage() {
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
       setToast(`+1 ${data.token.tier} Token`);
     },
-    onError: (err: Error) => setToast(err.message),
-  });
-
-  const moveMutation = useMutation({
-    mutationFn: ({ id, section }: { id: string; section: TaskSection }) =>
-      api(`/tasks/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ section }),
-      }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
     onError: (err: Error) => setToast(err.message),
   });
 
@@ -161,34 +150,6 @@ export function TasksPage() {
                         >
                           ✎
                         </Link>
-                      </div>
-
-                      <div className="task-section-picker" role="group" aria-label="Move task">
-                        {TASK_SECTIONS.map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            className={`section-pill${
-                              normalizeSection(task.section) === option ? " active" : ""
-                            }`}
-                            style={
-                              {
-                                "--pill-color": TASK_SECTION_COLOR[option],
-                              } as CSSProperties
-                            }
-                            disabled={
-                              moveMutation.isPending &&
-                              moveMutation.variables?.id === task.id
-                            }
-                            onClick={() => {
-                              if (normalizeSection(task.section) !== option) {
-                                moveMutation.mutate({ id: task.id, section: option });
-                              }
-                            }}
-                          >
-                            {TASK_SECTION_LABEL[option]}
-                          </button>
-                        ))}
                       </div>
 
                       <div className="task-card-actions">

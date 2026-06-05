@@ -977,6 +977,178 @@ h3,
   padding: 0.75rem 0.1rem;
 }
 
+.tab-bar--five a {
+  font-size: 0.42rem;
+  letter-spacing: 0.04em;
+  padding: 0.75rem 0.05rem;
+}
+
+.vision-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.vision-card {
+  padding: 1rem;
+}
+
+.vision-card--clickable {
+  cursor: pointer;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.vision-card--clickable:hover,
+.vision-card--clickable:focus-visible {
+  box-shadow: 0 0 16px rgba(0, 255, 255, 0.25);
+  border-color: var(--cyan);
+  outline: none;
+}
+
+.vision-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.vision-card-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.vision-chain {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.5rem 0 6rem;
+  min-height: 50vh;
+}
+
+.vision-chain-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 22rem;
+}
+
+.vision-chain-node {
+  position: relative;
+  width: 100%;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.vision-chain-node--vision {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  border-color: var(--cyan);
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+}
+
+.vision-chain-node-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin-bottom: 0.35rem;
+}
+
+.vision-chain-vision-name {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.vision-chain-node--completed {
+  opacity: 0.45;
+}
+
+.vision-chain-check {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.75rem;
+  color: #3dff7a;
+  text-shadow: 0 0 12px rgba(61, 255, 122, 0.6);
+  line-height: 1;
+}
+
+.vision-chain-node-body {
+  flex: 1;
+  min-width: 0;
+  padding-left: 2rem;
+}
+
+.vision-chain-node--completed .vision-chain-node-body {
+  padding-left: 2.5rem;
+}
+
+.vision-chain-goal-name {
+  font-size: 1rem;
+  word-break: break-word;
+}
+
+.vision-chain-edit-input {
+  width: 100%;
+}
+
+.vision-chain-node-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.vision-chain-check-btn {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.vision-chain-check-btn:hover:not(:disabled) {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.vision-chain-check-btn--done {
+  border-color: #3dff7a;
+  color: #3dff7a;
+}
+
+.vision-chain-connector {
+  width: 2px;
+  height: 2rem;
+  background: linear-gradient(
+    to bottom,
+    var(--cyan),
+    rgba(0, 255, 255, 0.3)
+  );
+  box-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
+}
+
+.vision-chain-end {
+  height: 1px;
+}
+
+.vision-chain-fab {
+  bottom: calc(4.5rem + var(--safe-bottom));
+}
+
 .daily-settings-list {
   display: flex;
   flex-direction: column;

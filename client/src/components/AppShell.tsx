@@ -5,6 +5,7 @@ export function AppShell() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const isTasksList = location.pathname === "/";
+  const isVisionsList = location.pathname === "/visions";
 
   return (
     <div className="app-shell">
@@ -40,7 +41,13 @@ export function AppShell() {
         </NavLink>
       )}
 
-      <nav className="tab-bar tab-bar--four">
+      {isVisionsList && (
+        <NavLink to="/visions/new" className="fab" aria-label="Add vision">
+          +
+        </NavLink>
+      )}
+
+      <nav className="tab-bar tab-bar--five">
         <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
           Tasks
         </NavLink>
@@ -51,7 +58,10 @@ export function AppShell() {
           Likes
         </NavLink>
         <NavLink to="/daily-settings" className={({ isActive }) => (isActive ? "active" : "")}>
-          Daily Settings
+          Daily
+        </NavLink>
+        <NavLink to="/visions" className={({ isActive }) => (isActive ? "active" : "")}>
+          Vision
         </NavLink>
       </nav>
     </div>

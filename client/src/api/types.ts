@@ -47,6 +47,28 @@ export interface SpinWheelSlice {
   empty: boolean;
 }
 
+export interface Vision {
+  id: string;
+  name: string;
+  sortOrder: number;
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+export interface Goal {
+  id: string;
+  visionId: string;
+  name: string;
+  sortOrder: number;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+export interface VisionWithGoals {
+  vision: Vision;
+  goals: Goal[];
+}
+
 export interface BonusToken {
   tier: RewardTier;
   source: string;

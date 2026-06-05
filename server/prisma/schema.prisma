@@ -58,6 +58,8 @@ model User {
   wheelConfigs   TierWheelConfig[]
   dailySettings  DailySettings?
   dailyBonusClaims DailyBonusClaim[]
+  visions        Vision[]
+  goals          Goal[]
 }
 
 model Habit {
@@ -138,6 +140,34 @@ model TierWheelConfig {
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tier])
+  @@index([userId])
+}
+
+model Vision {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String
+  sortOrder  Int       @default(0)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goals      Goal[]
+
+  @@index([userId])
+}
+
+model Goal {
+  id          String    @id @default(cuid())
+  visionId    String
+  userId      String
+  name        String
+  sortOrder   Int       @default(0)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  vision      Vision    @relation(fields: [visionId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([visionId])
   @@index([userId])
 }
 

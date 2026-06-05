@@ -13,6 +13,7 @@ import { tokensRouter } from "./routes/tokens.js";
 import { spinRouter } from "./routes/spin.js";
 import { wheelConfigRouter } from "./routes/wheel-config.js";
 import { dailySettingsRouter } from "./routes/daily-settings.js";
+import { visionsRouter } from "./routes/visions.js";
 
 export const app = express();
 
@@ -36,3 +37,4 @@ app.use("/api/tokens", tokensRouter);
 app.use("/api/spin", spinRouter);
 app.use("/api/wheel-config", wheelConfigRouter);
 app.use("/api/daily-settings", dailySettingsRouter);
+app.use("/api/visions", visionsRouter);

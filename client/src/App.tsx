@@ -17,6 +17,9 @@ import { TaskFormPage } from "./pages/TaskFormPage";
 import { LikesPage } from "./pages/LikesPage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { DailySettingsPage } from "./pages/DailySettingsPage";
+import { VisionsPage } from "./pages/VisionsPage";
+import { VisionFormPage } from "./pages/VisionFormPage";
+import { VisionChainPage } from "./pages/VisionChainPage";
 
 export default function App() {
   return (
@@ -36,6 +39,10 @@ export default function App() {
               <Route path="/likes" element={<LikesPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/daily-settings" element={<DailySettingsPage />} />
+              <Route path="/visions" element={<VisionsPage />} />
+              <Route path="/visions/new" element={<VisionFormPage />} />
+              <Route path="/visions/:id/edit" element={<VisionFormPage />} />
+              <Route path="/visions/:id/chain" element={<VisionChainPage />} />
             </Route>
           </Route>
 

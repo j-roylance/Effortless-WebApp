@@ -220,6 +220,64 @@ h3,
   margin: 0 auto;
 }
 
+.welcome-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem calc(2rem + var(--safe-bottom));
+  max-width: var(--max-width);
+  margin: 0 auto;
+  position: relative;
+}
+
+.welcome-page-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 2rem;
+  width: 100%;
+}
+
+.welcome-page-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 4.5vw, 1.35rem);
+  letter-spacing: 0.06em;
+  line-height: 1.45;
+  color: var(--cyan);
+  text-shadow: 0 0 20px var(--cyan-dim);
+  max-width: 18rem;
+}
+
+.welcome-page-begin {
+  font-size: 0.85rem;
+  padding: 0.85rem 2rem;
+}
+
+.welcome-page-skip {
+  margin-top: auto;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.2s;
+}
+
+.welcome-page-skip:hover {
+  color: var(--cyan);
+}
+
 .auth-form {
   width: 100%;
   display: flex;

@@ -30,7 +30,7 @@ export function SignupPage() {
         body: JSON.stringify({ email, password }),
       });
       await refresh();
-      navigate("/");
+      navigate("/welcome");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Registration failed");
     } finally {

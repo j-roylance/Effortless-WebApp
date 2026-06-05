@@ -21,6 +21,7 @@ import { VisionsPage } from "./pages/VisionsPage";
 import { VisionFormPage } from "./pages/VisionFormPage";
 import { VisionChainPage } from "./pages/VisionChainPage";
 import { AiPage } from "./pages/AiPage";
+import { WelcomePage } from "./pages/WelcomePage";
 
 export default function App() {
   return (
@@ -33,6 +34,7 @@ export default function App() {
           </Route>
 
           <Route element={<ProtectedRoute />}>
+            <Route path="/welcome" element={<WelcomePage />} />
             <Route element={<AppShell />}>
               <Route index element={<TasksPage />} />
               <Route path="/tasks/new" element={<TaskFormPage />} />

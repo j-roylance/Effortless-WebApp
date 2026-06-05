@@ -155,7 +155,7 @@ export function TaskFormPage() {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
       if (isNew && "token" in data) {
-        navigate("/", { state: { toast: `+1 ${data.token.tier} Token` } });
+        navigate("/", { state: { tokenReward: data.token.tier } });
       } else {
         navigate("/");
       }

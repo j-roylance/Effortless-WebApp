@@ -765,3 +765,202 @@ h3,
   gap: 0.5rem;
   cursor: pointer;
 }
+
+.token-reward-overlay {
+  z-index: 400;
+  background: rgba(0, 0, 0, 0.92);
+  animation: token-overlay-in 0.35s ease;
+}
+
+.token-reward-modal {
+  position: relative;
+  text-align: center;
+  padding: 2rem 1.5rem 1.5rem;
+  overflow: hidden;
+  animation: token-modal-in 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  border-color: color-mix(in srgb, var(--token-color) 55%, var(--border));
+  box-shadow:
+    0 0 var(--token-glow) color-mix(in srgb, var(--token-color) 45%, transparent),
+    inset 0 0 40px color-mix(in srgb, var(--token-color) 12%, transparent);
+}
+
+.token-reward-close-top {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  z-index: 2;
+}
+
+.token-reward-stage {
+  position: relative;
+  width: min(240px, 70vw);
+  height: min(240px, 70vw);
+  margin: 0.5rem auto 1.25rem;
+}
+
+.token-reward-coin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 120px;
+  height: 120px;
+  margin: -60px 0 0 -60px;
+  border-radius: 50%;
+  border: 3px solid var(--token-color);
+  background: radial-gradient(
+    circle at 35% 30%,
+    color-mix(in srgb, var(--token-color) 55%, white),
+    color-mix(in srgb, var(--token-color) 25%, black) 70%
+  );
+  box-shadow:
+    0 0 var(--token-glow) color-mix(in srgb, var(--token-color) 65%, transparent),
+    inset 0 -8px 16px rgba(0, 0, 0, 0.45);
+  animation: token-coin-pop 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards,
+    token-coin-glow 2s ease-in-out 0.8s infinite alternate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.token-reward-coin-inner {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 0 12px var(--token-color), 0 2px 4px rgba(0, 0, 0, 0.6);
+  animation: token-label-shine 1.8s ease-in-out 0.5s infinite alternate;
+}
+
+.token-reward-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100px;
+  height: 100px;
+  margin: -50px 0 0 -50px;
+  border-radius: 50%;
+  border: 2px solid var(--token-color);
+  opacity: 0;
+  animation: token-ring-burst var(--burst-duration) ease-out infinite;
+  transform: scale(var(--ring-scale, 1.2));
+}
+
+.token-reward-sparkle {
+  position: absolute;
+  margin: -50% 0 0 -50%;
+  border-radius: 50%;
+  background: var(--token-color);
+  box-shadow: 0 0 8px var(--token-color), 0 0 14px #fff;
+  opacity: 0;
+  animation: token-sparkle-twinkle ease-in-out infinite;
+  pointer-events: none;
+}
+
+.token-reward-title {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--token-color);
+  text-shadow: 0 0 16px color-mix(in srgb, var(--token-color) 50%, transparent);
+}
+
+.token-reward-message {
+  margin: 0 0 1.25rem;
+  font-size: 1rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.token-reward-close-bottom {
+  width: 100%;
+}
+
+@keyframes token-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes token-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.82) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes token-coin-pop {
+  0% {
+    transform: scale(0) rotate(-180deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.12) rotate(8deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes token-coin-glow {
+  from {
+    box-shadow:
+      0 0 calc(var(--token-glow) * 0.7) color-mix(in srgb, var(--token-color) 50%, transparent),
+      inset 0 -8px 16px rgba(0, 0, 0, 0.45);
+  }
+  to {
+    box-shadow:
+      0 0 calc(var(--token-glow) * 1.2) color-mix(in srgb, var(--token-color) 80%, transparent),
+      inset 0 -8px 16px rgba(0, 0, 0, 0.45);
+  }
+}
+
+@keyframes token-label-shine {
+  from {
+    filter: brightness(1);
+  }
+  to {
+    filter: brightness(1.35);
+  }
+}
+
+@keyframes token-ring-burst {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.85;
+  }
+  70% {
+    opacity: 0.25;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@keyframes token-sparkle-twinkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  70% {
+    opacity: 0.4;
+    transform: scale(0.6);
+  }
+}

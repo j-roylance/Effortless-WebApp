@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { SpinResult } from "../api/types";
@@ -9,6 +9,7 @@ import {
   type SpinOutcome,
 } from "../domain/tiers";
 import { SpinnerWheel } from "./SpinnerWheel";
+import { TokenRewardModal } from "./TokenRewardModal";
 
 type Phase = "idle" | "outcome" | "spinning" | "done";
 
@@ -22,6 +23,7 @@ export function RandomizerModal({
   const queryClient = useQueryClient();
   const [phase, setPhase] = useState<Phase>("idle");
   const [result, setResult] = useState<SpinResult | null>(null);
+  const [levelUpTokenTier, setLevelUpTokenTier] = useState<RewardTier | null>(null);
 
   const spinMutation = useMutation({
     mutationFn: () =>
@@ -50,7 +52,14 @@ export function RandomizerModal({
   const showSpinner =
     phase === "spinning" && result && result.spinnerLikes.length > 0;
 
+  useEffect(() => {
+    if (phase === "done" && result?.newTokenFromLevelUp) {
+      setLevelUpTokenTier(result.effectiveTier);
+    }
+  }, [phase, result]);
+
   return (
+    <>
     <div className="modal-overlay" onClick={onClose} role="presentation">
       <div
         className="modal neon-card"
@@ -92,11 +101,6 @@ export function RandomizerModal({
         {outcome && phase !== "idle" && (
           <div className="outcome-flash" style={{ borderColor: TIER_COLORS[result!.effectiveTier] }}>
             {OUTCOME_LABELS[outcome as SpinOutcome]}
-            {result!.newTokenFromLevelUp && (
-              <p style={{ fontSize: "0.85rem", margin: "0.5rem 0 0" }}>
-                +1 {result!.effectiveTier} token earned!
-              </p>
-            )}
           </div>
         )}
 
@@ -138,5 +142,13 @@ export function RandomizerModal({
         )}
       </div>
     </div>
+
+    {levelUpTokenTier && (
+      <TokenRewardModal
+        tier={levelUpTokenTier}
+        onClose={() => setLevelUpTokenTier(null)}
+      />
+    )}
+    </>
   );
 }

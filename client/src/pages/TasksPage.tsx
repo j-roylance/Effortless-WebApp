@@ -5,6 +5,7 @@ import { api } from "../api/client";
 import type { Task, TokenBalances } from "../api/types";
 import { TaskCard } from "../components/TaskCard";
 import { Toast } from "../components/Toast";
+import { TokenRewardModal } from "../components/TokenRewardModal";
 import { isTaskPastDue } from "../domain/recurrence";
 import {
   TASK_SECTIONS,
@@ -62,11 +63,15 @@ export function TasksPage() {
   const navigate = useNavigate();
   const [showTokens, setShowTokens] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [tokenReward, setTokenReward] = useState<RewardTier | null>(null);
 
   useEffect(() => {
-    const msg = (location.state as { toast?: string } | null)?.toast;
-    if (msg) {
-      setToast(msg);
+    const state = location.state as { tokenReward?: RewardTier; toast?: string } | null;
+    if (state?.tokenReward) {
+      setTokenReward(state.tokenReward);
+      navigate(location.pathname, { replace: true, state: {} });
+    } else if (state?.toast) {
+      setToast(state.toast);
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, location.pathname, navigate]);
@@ -87,7 +92,7 @@ export function TasksPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
-      setToast(`+1 ${data.token.tier} Token`);
+      setTokenReward(data.token.tier);
     },
     onError: (err: Error) => setToast(err.message),
   });
@@ -172,6 +177,10 @@ export function TasksPage() {
       )}
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+
+      {tokenReward && (
+        <TokenRewardModal tier={tokenReward} onClose={() => setTokenReward(null)} />
+      )}
     </>
   );
 }

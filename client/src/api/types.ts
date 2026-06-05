@@ -1,3 +1,4 @@
+import type { TaskSection } from "../domain/tasks";
 import type { RewardTier, SpinOutcome } from "../domain/tiers";
 
 export interface User {
@@ -10,6 +11,7 @@ export interface Task {
   id: string;
   name: string;
   tier: RewardTier;
+  section: TaskSection;
   persistAfterDone: boolean;
   sortOrder: number;
   achievedAt: string | null;

@@ -1,8 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Task, TokenBalances } from "../api/types";
+import {
+  TASK_SECTIONS,
+  TASK_SECTION_COLOR,
+  TASK_SECTION_LABEL,
+  normalizeSection,
+  type TaskSection,
+} from "../domain/tasks";
 import { TIERS, type RewardTier } from "../domain/tiers";
 import { TierBadge } from "../components/TierBadge";
 import { Toast } from "../components/Toast";
@@ -43,7 +50,29 @@ export function TasksPage() {
     onError: (err: Error) => setToast(err.message),
   });
 
+  const moveMutation = useMutation({
+    mutationFn: ({ id, section }: { id: string; section: TaskSection }) =>
+      api(`/tasks/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ section }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+    onError: (err: Error) => setToast(err.message),
+  });
+
   const tasks = tasksData?.tasks ?? [];
+  const tasksBySection = useMemo(() => {
+    const grouped = Object.fromEntries(
+      TASK_SECTIONS.map((section) => [section, [] as Task[]])
+    ) as Record<TaskSection, Task[]>;
+
+    for (const task of tasks) {
+      grouped[normalizeSection(task.section)].push(task);
+    }
+
+    return grouped;
+  }, [tasks]);
+
   const balances = tokenData?.balances;
   const totalTokens = balances
     ? TIERS.reduce((sum, t) => sum + (balances[t] ?? 0), 0)
@@ -89,43 +118,97 @@ export function TasksPage() {
         </div>
       )}
 
-      <div className="task-list">
-        {tasks.map((task) => (
-          <article key={task.id} className="task-card neon-card">
-            <div className="task-card-header">
-              <div>
-                <h3 style={{ margin: "0 0 0.35rem", fontSize: "1.1rem" }}>{task.name}</h3>
-                <TierBadge tier={task.tier} />
-                {!task.persistAfterDone && (
-                  <span
-                    style={{
-                      marginLeft: "0.5rem",
-                      fontSize: "0.7rem",
-                      color: "var(--text-dim)",
-                    }}
-                  >
-                    One-time
-                  </span>
-                )}
-              </div>
-              <Link to={`/tasks/${task.id}/edit`} className="icon-btn" aria-label="Edit task">
-                ✎
-              </Link>
-            </div>
-            <div className="task-card-actions">
-              <button
-                type="button"
-                className="neon-btn neon-btn-primary"
-                style={{ flex: 1 }}
-                onClick={() => achieveMutation.mutate(task.id)}
-                disabled={achieveMutation.isPending}
-              >
-                Achieve
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
+      {!isLoading &&
+        TASK_SECTIONS.map((section) => {
+          const sectionTasks = tasksBySection[section];
+          const sectionClass = section.toLowerCase();
+
+          return (
+            <section
+              key={section}
+              className={`task-section task-section--${sectionClass}`}
+            >
+              <h3 className="task-section-title">{TASK_SECTION_LABEL[section]}</h3>
+
+              {sectionTasks.length === 0 ? (
+                <p className="task-section-empty">No {sectionClass} tasks</p>
+              ) : (
+                <div className="task-list">
+                  {sectionTasks.map((task) => (
+                    <article key={task.id} className="task-card neon-card">
+                      <div className="task-card-header">
+                        <div>
+                          <h4 style={{ margin: "0 0 0.35rem", fontSize: "1.1rem" }}>
+                            {task.name}
+                          </h4>
+                          <TierBadge tier={task.tier} />
+                          {!task.persistAfterDone && (
+                            <span
+                              style={{
+                                marginLeft: "0.5rem",
+                                fontSize: "0.7rem",
+                                color: "var(--text-dim)",
+                              }}
+                            >
+                              One-time
+                            </span>
+                          )}
+                        </div>
+                        <Link
+                          to={`/tasks/${task.id}/edit`}
+                          className="icon-btn"
+                          aria-label="Edit task"
+                        >
+                          ✎
+                        </Link>
+                      </div>
+
+                      <div className="task-section-picker" role="group" aria-label="Move task">
+                        {TASK_SECTIONS.map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            className={`section-pill${
+                              normalizeSection(task.section) === option ? " active" : ""
+                            }`}
+                            style={
+                              {
+                                "--pill-color": TASK_SECTION_COLOR[option],
+                              } as CSSProperties
+                            }
+                            disabled={
+                              moveMutation.isPending &&
+                              moveMutation.variables?.id === task.id
+                            }
+                            onClick={() => {
+                              if (normalizeSection(task.section) !== option) {
+                                moveMutation.mutate({ id: task.id, section: option });
+                              }
+                            }}
+                          >
+                            {TASK_SECTION_LABEL[option]}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="task-card-actions">
+                        <button
+                          type="button"
+                          className="neon-btn neon-btn-primary"
+                          style={{ flex: 1 }}
+                          onClick={() => achieveMutation.mutate(task.id)}
+                          disabled={achieveMutation.isPending}
+                        >
+                          Achieve
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </>

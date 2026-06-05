@@ -1,8 +1,15 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Task } from "../api/types";
+import {
+  TASK_SECTIONS,
+  TASK_SECTION_COLOR,
+  TASK_SECTION_LABEL,
+  normalizeSection,
+  type TaskSection,
+} from "../domain/tasks";
 import { TIERS, type RewardTier } from "../domain/tiers";
 
 export function TaskFormPage() {
@@ -13,6 +20,7 @@ export function TaskFormPage() {
 
   const [name, setName] = useState("");
   const [tier, setTier] = useState<RewardTier>("Bronze");
+  const [section, setSection] = useState<TaskSection>("Could");
   const [persistAfterDone, setPersistAfterDone] = useState(true);
   const [error, setError] = useState("");
 
@@ -28,6 +36,7 @@ export function TaskFormPage() {
       if (task) {
         setName(task.name);
         setTier(task.tier);
+        setSection(normalizeSection(task.section));
         setPersistAfterDone(task.persistAfterDone);
       }
     }
@@ -35,7 +44,7 @@ export function TaskFormPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const body = { name, tier, persistAfterDone };
+      const body = { name, tier, section, persistAfterDone };
       if (isNew) {
         return api<{ task: Task; token: { tier: RewardTier } }>("/tasks", {
           method: "POST",
@@ -99,6 +108,25 @@ export function TaskFormPage() {
             onChange={(e) => setName(e.target.value)}
             required
           />
+        </div>
+
+        <div className="form-field">
+          <span style={{ display: "block", marginBottom: "0.35rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>
+            Section
+          </span>
+          <div className="task-section-picker">
+            {TASK_SECTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`section-pill${section === option ? " active" : ""}`}
+                style={{ "--pill-color": TASK_SECTION_COLOR[option] } as CSSProperties}
+                onClick={() => setSection(option)}
+              >
+                {TASK_SECTION_LABEL[option]}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="form-field">

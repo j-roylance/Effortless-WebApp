@@ -9,6 +9,9 @@
   --border: #00f3ff55;
   --danger: #ff4466;
   --success: #00ff88;
+  --section-must: #ff4466;
+  --section-should: #00ff88;
+  --section-could: #4488ff;
   --font-display: "Orbitron", system-ui, sans-serif;
   --font-body: "Rajdhani", system-ui, sans-serif;
   --max-width: 480px;
@@ -263,6 +266,87 @@ h3,
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+}
+
+.task-section {
+  margin-bottom: 1.5rem;
+}
+
+.task-section-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  font-family: var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.task-section--must .task-section-title {
+  color: var(--section-must);
+  text-shadow: 0 0 8px rgba(255, 68, 102, 0.4);
+}
+
+.task-section--should .task-section-title {
+  color: var(--section-should);
+  text-shadow: 0 0 8px rgba(0, 255, 136, 0.35);
+}
+
+.task-section--could .task-section-title {
+  color: var(--section-could);
+  text-shadow: 0 0 8px rgba(68, 136, 255, 0.35);
+}
+
+.task-section--must .task-card {
+  border-color: rgba(255, 68, 102, 0.45);
+  box-shadow: 0 0 12px rgba(255, 68, 102, 0.15), inset 0 0 20px rgba(255, 68, 102, 0.03);
+}
+
+.task-section--should .task-card {
+  border-color: rgba(0, 255, 136, 0.4);
+  box-shadow: 0 0 12px rgba(0, 255, 136, 0.12), inset 0 0 20px rgba(0, 255, 136, 0.03);
+}
+
+.task-section--could .task-card {
+  border-color: rgba(68, 136, 255, 0.45);
+  box-shadow: 0 0 12px rgba(68, 136, 255, 0.15), inset 0 0 20px rgba(68, 136, 255, 0.03);
+}
+
+.task-section-empty {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.task-section-picker {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.section-pill {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.45rem;
+  font-family: var(--font-display);
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid color-mix(in srgb, var(--pill-color) 50%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pill-color) 10%, transparent);
+  color: var(--pill-color);
+  cursor: pointer;
+}
+
+.section-pill.active {
+  border-color: var(--pill-color);
+  background: color-mix(in srgb, var(--pill-color) 22%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--pill-color) 35%, transparent);
+}
+
+.section-pill:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 .task-list {

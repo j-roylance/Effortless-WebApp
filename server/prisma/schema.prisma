@@ -32,6 +32,12 @@ enum SpinOutcome {
   LevelDown
 }
 
+enum TaskSection {
+  Must
+  Should
+  Could
+}
+
 model User {
   id           String        @id @default(cuid())
   email        String        @unique
@@ -45,12 +51,13 @@ model User {
 }
 
 model Habit {
-  id               String     @id @default(cuid())
+  id               String      @id @default(cuid())
   userId           String
   name             String
   tier             RewardTier
-  persistAfterDone Boolean    @default(true)
-  sortOrder        Int        @default(0)
+  section          TaskSection @default(Could)
+  persistAfterDone Boolean     @default(true)
+  sortOrder        Int         @default(0)
   achievedAt       DateTime?
   archivedAt       DateTime?
   createdAt        DateTime   @default(now())

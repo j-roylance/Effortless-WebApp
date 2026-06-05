@@ -1,9 +1,10 @@
-import { RewardTier } from "@prisma/client";
+import { RewardTier, TaskSection } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { isValidTier } from "../domain/tiers.js";
+import { isValidSection, normalizeSection } from "../domain/tasks.js";
 
 export const tasksRouter = Router();
 tasksRouter.use(requireAuth);
@@ -11,33 +12,49 @@ tasksRouter.use(requireAuth);
 const taskBodySchema = z.object({
   name: z.string().min(1).max(200),
   tier: z.string().refine(isValidTier, { message: "Invalid tier" }),
+  section: z
+    .string()
+    .refine(isValidSection, { message: "Invalid section" })
+    .optional(),
   persistAfterDone: z.boolean().optional(),
 });
+
+async function nextSortOrder(userId: string, section: TaskSection): Promise<number> {
+  const count = await prisma.habit.count({
+    where: { userId, archivedAt: null, section },
+  });
+  return count;
+}
 
 tasksRouter.get("/", async (req: AuthedRequest, res) => {
   const rows = await prisma.habit.findMany({
     where: { userId: req.user!.userId, archivedAt: null },
-    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    orderBy: [{ section: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
   });
-  res.json({ tasks: rows });
+  res.json({
+    tasks: rows.map((row) => ({
+      ...row,
+      section: normalizeSection(row.section),
+    })),
+  });
 });
 
 /** New task grants +1 Bronze token (source: task_create). */
 tasksRouter.post("/", async (req: AuthedRequest, res) => {
   try {
     const body = taskBodySchema.parse(req.body);
-    const count = await prisma.habit.count({
-      where: { userId: req.user!.userId, archivedAt: null },
-    });
+    const section = normalizeSection(body.section);
 
     const result = await prisma.$transaction(async (tx) => {
+      const sortOrder = await nextSortOrder(req.user!.userId, section);
       const task = await tx.habit.create({
         data: {
           userId: req.user!.userId,
           name: body.name.trim(),
           tier: body.tier,
+          section,
           persistAfterDone: body.persistAfterDone ?? true,
-          sortOrder: count,
+          sortOrder,
         },
       });
 
@@ -73,11 +90,20 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
       res.status(404).json({ error: "Not found" });
       return;
     }
+
+    const nextSection =
+      body.section !== undefined ? normalizeSection(body.section) : existing.section;
+    const sectionChanged = nextSection !== existing.section;
+
     const task = await prisma.habit.update({
       where: { id: existing.id },
       data: {
         ...(body.name !== undefined && { name: body.name.trim() }),
         ...(body.tier !== undefined && { tier: body.tier }),
+        ...(body.section !== undefined && { section: nextSection }),
+        ...(sectionChanged && {
+          sortOrder: await nextSortOrder(req.user!.userId, nextSection),
+        }),
         ...(body.persistAfterDone !== undefined && {
           persistAfterDone: body.persistAfterDone,
         }),

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState, type CSSProperties } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Task } from "../api/types";
@@ -22,11 +22,26 @@ import {
 } from "../domain/tasks";
 import { TIERS, type RewardTier } from "../domain/tiers";
 
-export function TaskFormPage() {
+export function TaskFormPage({
+  embedded = false,
+  initialDate,
+  returnTo: returnToProp,
+  onClose,
+}: {
+  embedded?: boolean;
+  initialDate?: string;
+  returnTo?: string;
+  onClose?: () => void;
+} = {}) {
   const { id } = useParams();
   const isNew = !id || id === "new";
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
+  const returnTo =
+    returnToProp ??
+    (location.state as { returnTo?: string } | null)?.returnTo ??
+    "/";
 
   const [name, setName] = useState("");
   const [tier, setTier] = useState<RewardTier>("Bronze");
@@ -47,6 +62,14 @@ export function TaskFormPage() {
   const [recurrenceTime, setRecurrenceTime] = useState("09:00");
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
   const [daysOfMonth, setDaysOfMonth] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (isNew && initialDate) {
+      setEnableScheduled(true);
+      setScheduledDate(initialDate);
+      setScheduledTime("09:00");
+    }
+  }, [isNew, initialDate]);
 
   const { data } = useQuery({
     queryKey: ["tasks"],
@@ -154,10 +177,17 @@ export function TaskFormPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
+      if (embedded && onClose) {
+        onClose();
+        if (isNew && "token" in data) {
+          navigate(returnTo, { state: { tokenReward: data.token.tier } });
+        }
+        return;
+      }
       if (isNew && "token" in data) {
-        navigate("/", { state: { tokenReward: data.token.tier } });
+        navigate(returnTo, { state: { tokenReward: data.token.tier } });
       } else {
-        navigate("/");
+        navigate(returnTo);
       }
     },
     onError: (err: Error) => setError(err.message),
@@ -167,9 +197,21 @@ export function TaskFormPage() {
     mutationFn: () => api(`/tasks/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      navigate("/");
+      if (embedded && onClose) {
+        onClose();
+      } else {
+        navigate(returnTo);
+      }
     },
   });
+
+  function handleBack() {
+    if (embedded && onClose) {
+      onClose();
+    } else {
+      navigate(returnTo);
+    }
+  }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -183,18 +225,18 @@ export function TaskFormPage() {
   }
 
   return (
-    <div>
+    <div className={embedded ? "task-form-embedded" : undefined}>
       <div className="page-header">
         <h2 style={{ margin: 0, fontSize: "0.85rem" }}>
           {isNew ? "New task" : "Edit task"}
         </h2>
-        <button type="button" className="neon-btn neon-btn-sm" onClick={() => navigate("/")}>
+        <button type="button" className="neon-btn neon-btn-sm" onClick={handleBack}>
           Back
         </button>
       </div>
 
       <form
-        className="neon-card"
+        className={embedded ? undefined : "neon-card"}
         onSubmit={handleSubmit}
         style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
       >

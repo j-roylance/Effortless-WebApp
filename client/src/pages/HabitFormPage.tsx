@@ -37,7 +37,7 @@ export function HabitFormPage() {
     mutationFn: async () => {
       const body = { name, tier, persistAfterDone };
       if (isNew) {
-        return api<{ habit: Habit }>("/habits", {
+        return api<{ habit: Habit; token: { tier: RewardTier } }>("/habits", {
           method: "POST",
           body: JSON.stringify(body),
         });
@@ -47,9 +47,14 @@ export function HabitFormPage() {
         body: JSON.stringify(body),
       });
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["habits"] });
-      navigate("/");
+      queryClient.invalidateQueries({ queryKey: ["tokens"] });
+      if (isNew && "token" in data) {
+        navigate("/", { state: { toast: `+1 ${data.token.tier} Token` } });
+      } else {
+        navigate("/");
+      }
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -137,6 +142,12 @@ export function HabitFormPage() {
             </label>
           </div>
         </div>
+
+        {isNew && (
+          <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-dim)" }}>
+            Saving a new habit earns +1 Bronze Token.
+          </p>
+        )}
 
         <button
           type="submit"

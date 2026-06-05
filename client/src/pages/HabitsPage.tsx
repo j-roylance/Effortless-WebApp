@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Habit, TokenBalances } from "../api/types";
@@ -9,8 +9,18 @@ import { Toast } from "../components/Toast";
 
 export function HabitsPage() {
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [showTokens, setShowTokens] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    const msg = (location.state as { toast?: string } | null)?.toast;
+    if (msg) {
+      setToast(msg);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate]);
 
   const { data: habitsData, isLoading } = useQuery({
     queryKey: ["habits"],

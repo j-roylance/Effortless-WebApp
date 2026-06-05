@@ -1,3 +1,4 @@
+import { RewardTier } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
@@ -27,16 +28,33 @@ habitsRouter.post("/", async (req: AuthedRequest, res) => {
     const count = await prisma.habit.count({
       where: { userId: req.user!.userId, archivedAt: null },
     });
-    const habit = await prisma.habit.create({
-      data: {
-        userId: req.user!.userId,
-        name: body.name.trim(),
-        tier: body.tier,
-        persistAfterDone: body.persistAfterDone ?? true,
-        sortOrder: count,
-      },
+
+    const result = await prisma.$transaction(async (tx) => {
+      const habit = await tx.habit.create({
+        data: {
+          userId: req.user!.userId,
+          name: body.name.trim(),
+          tier: body.tier,
+          persistAfterDone: body.persistAfterDone ?? true,
+          sortOrder: count,
+        },
+      });
+
+      const token = await tx.rewardToken.create({
+        data: {
+          userId: req.user!.userId,
+          tier: RewardTier.Bronze,
+          source: "habit_create",
+        },
+      });
+
+      return { habit, token };
     });
-    res.status(201).json({ habit });
+
+    res.status(201).json({
+      habit: result.habit,
+      token: { id: result.token.id, tier: result.token.tier },
+    });
   } catch (e) {
     const err = e as Error;
     res.status(400).json({ error: err.message });

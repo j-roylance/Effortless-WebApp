@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { Task } from "../api/types";
+import type { AchieveResult, BonusToken, Task } from "../api/types";
 import { TokenRewardModal } from "../components/TokenRewardModal";
+import { useTokenRewardQueue } from "../hooks/useTokenRewardQueue";
 import { useAuth } from "../context/AuthContext";
 import { TaskFormPage } from "./TaskFormPage";
 import {
@@ -40,17 +41,18 @@ export function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState(todayDateInput());
   const [showNewTask, setShowNewTask] = useState(false);
   const [planningTick, setPlanningTick] = useState(0);
-  const [tokenReward, setTokenReward] = useState<RewardTier | null>(null);
+  const { current: tokenReward, enqueue: enqueueTokenReward, dismissCurrent: dismissTokenReward } =
+    useTokenRewardQueue();
   const [dragging, setDragging] = useState<CalendarEntry | null>(null);
   const [dragMinutes, setDragMinutes] = useState<number | null>(null);
 
   useEffect(() => {
     const state = location.state as { tokenReward?: RewardTier } | null;
     if (state?.tokenReward) {
-      setTokenReward(state.tokenReward);
+      enqueueTokenReward([state.tokenReward]);
       navigate("/calendar", { replace: true, state: {} });
     }
-  }, [location.state, navigate]);
+  }, [location.state, navigate, enqueueTokenReward]);
 
   const { data: tasksData, isLoading } = useQuery({
     queryKey: ["tasks"],
@@ -98,11 +100,28 @@ export function CalendarPage() {
 
   const achieveMutation = useMutation({
     mutationFn: (id: string) =>
-      api<{ token: { tier: RewardTier } }>(`/tasks/${id}/achieve`, { method: "POST" }),
+      api<AchieveResult>(`/tasks/${id}/achieve`, { method: "POST" }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
-      setTokenReward(data.token.tier);
+      enqueueTokenReward([
+        data.token.tier,
+        ...(data.bonusTokens?.map((b) => b.tier) ?? []),
+      ]);
+    },
+  });
+
+  const planningMutation = useMutation({
+    mutationFn: () =>
+      api<{ token: BonusToken | null }>("/daily-settings/claim-planning", {
+        method: "POST",
+      }),
+    onSuccess: (data) => {
+      if (!user?.id) return;
+      queryClient.invalidateQueries({ queryKey: ["tokens"] });
+      setPlanningDone(user.id, todayDateInput());
+      setPlanningTick((t) => t + 1);
+      if (data.token?.tier) enqueueTokenReward([data.token.tier]);
     },
   });
 
@@ -112,9 +131,8 @@ export function CalendarPage() {
   });
 
   function handlePlanningDone() {
-    if (!user?.id) return;
-    setPlanningDone(user.id, todayDateInput());
-    setPlanningTick((t) => t + 1);
+    if (!user?.id || planningMutation.isPending) return;
+    planningMutation.mutate();
   }
 
   function clearDragListeners() {
@@ -205,8 +223,9 @@ export function CalendarPage() {
             type="button"
             className="neon-btn neon-btn-primary"
             onClick={handlePlanningDone}
+            disabled={planningMutation.isPending}
           >
-            Done planning today
+            {planningMutation.isPending ? "Saving…" : "Done planning today"}
           </button>
         )}
       </div>
@@ -331,7 +350,7 @@ export function CalendarPage() {
       )}
 
       {tokenReward && (
-        <TokenRewardModal tier={tokenReward} onClose={() => setTokenReward(null)} />
+        <TokenRewardModal tier={tokenReward} onClose={dismissTokenReward} />
       )}
     </>
   );

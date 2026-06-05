@@ -16,6 +16,7 @@ import { TasksPage } from "./pages/TasksPage";
 import { TaskFormPage } from "./pages/TaskFormPage";
 import { LikesPage } from "./pages/LikesPage";
 import { CalendarPage } from "./pages/CalendarPage";
+import { DailySettingsPage } from "./pages/DailySettingsPage";
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
               <Route path="/tasks/:id/edit" element={<TaskFormPage />} />
               <Route path="/likes" element={<LikesPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/daily-settings" element={<DailySettingsPage />} />
             </Route>
           </Route>
 

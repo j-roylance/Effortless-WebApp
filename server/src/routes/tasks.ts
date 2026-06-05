@@ -11,6 +11,7 @@ import {
   parseRecurrenceConfig,
   type RecurrenceConfig,
 } from "../domain/recurrence.js";
+import { evaluateAchievementBonuses } from "../services/daily-rewards.js";
 
 export const tasksRouter = Router();
 tasksRouter.use(requireAuth);
@@ -284,6 +285,8 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
         )
       : { scheduledAt: task.scheduledAt, dueAt: task.dueAt };
 
+  const timeZone = (req.headers["x-timezone"] as string) || "UTC";
+
   const result = await prisma.$transaction(async (tx) => {
     const token = await tx.rewardToken.create({
       data: {
@@ -306,8 +309,14 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
     return { token, task: updated };
   });
 
+  const bonusTokens = await evaluateAchievementBonuses(
+    req.user!.userId,
+    timeZone
+  );
+
   res.json({
     task: serializeTask(result.task),
     token: { id: result.token.id, tier: result.token.tier },
+    bonusTokens,
   });
 });

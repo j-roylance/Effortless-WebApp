@@ -40,7 +40,7 @@ export function AppShell() {
         </NavLink>
       )}
 
-      <nav className="tab-bar tab-bar--three">
+      <nav className="tab-bar tab-bar--four">
         <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
           Tasks
         </NavLink>
@@ -49,6 +49,9 @@ export function AppShell() {
         </NavLink>
         <NavLink to="/likes" className={({ isActive }) => (isActive ? "active" : "")}>
           Likes
+        </NavLink>
+        <NavLink to="/daily-settings" className={({ isActive }) => (isActive ? "active" : "")}>
+          Daily Settings
         </NavLink>
       </nav>
     </div>

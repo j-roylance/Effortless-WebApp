@@ -47,6 +47,17 @@ export interface SpinWheelSlice {
   empty: boolean;
 }
 
+export interface BonusToken {
+  tier: RewardTier;
+  source: string;
+}
+
+export interface AchieveResult {
+  task: Task;
+  token: { id: string; tier: RewardTier };
+  bonusTokens?: BonusToken[];
+}
+
 export interface SpinResult {
   outcome: SpinOutcome;
   effectiveTier: RewardTier;

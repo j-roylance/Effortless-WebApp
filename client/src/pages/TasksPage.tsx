@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { Task, TokenBalances } from "../api/types";
+import type { AchieveResult, Task, TokenBalances } from "../api/types";
 import { TaskCard } from "../components/TaskCard";
 import { Toast } from "../components/Toast";
 import { TokenRewardModal } from "../components/TokenRewardModal";
+import { useTokenRewardQueue } from "../hooks/useTokenRewardQueue";
 import { isTaskPastDue } from "../domain/recurrence";
 import {
   TASK_SECTIONS,
@@ -63,18 +64,19 @@ export function TasksPage() {
   const navigate = useNavigate();
   const [showTokens, setShowTokens] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [tokenReward, setTokenReward] = useState<RewardTier | null>(null);
+  const { current: tokenReward, enqueue: enqueueTokenReward, dismissCurrent: dismissTokenReward } =
+    useTokenRewardQueue();
 
   useEffect(() => {
     const state = location.state as { tokenReward?: RewardTier; toast?: string } | null;
     if (state?.tokenReward) {
-      setTokenReward(state.tokenReward);
+      enqueueTokenReward([state.tokenReward]);
       navigate(location.pathname, { replace: true, state: {} });
     } else if (state?.toast) {
       setToast(state.toast);
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.state, location.pathname, navigate]);
+  }, [location.state, location.pathname, navigate, enqueueTokenReward]);
 
   const { data: tasksData, isLoading } = useQuery({
     queryKey: ["tasks"],
@@ -88,11 +90,14 @@ export function TasksPage() {
 
   const achieveMutation = useMutation({
     mutationFn: (id: string) =>
-      api<{ token: { tier: RewardTier } }>(`/tasks/${id}/achieve`, { method: "POST" }),
+      api<AchieveResult>(`/tasks/${id}/achieve`, { method: "POST" }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
-      setTokenReward(data.token.tier);
+      enqueueTokenReward([
+        data.token.tier,
+        ...(data.bonusTokens?.map((b) => b.tier) ?? []),
+      ]);
     },
     onError: (err: Error) => setToast(err.message),
   });
@@ -179,7 +184,7 @@ export function TasksPage() {
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
       {tokenReward && (
-        <TokenRewardModal tier={tokenReward} onClose={() => setTokenReward(null)} />
+        <TokenRewardModal tier={tokenReward} onClose={dismissTokenReward} />
       )}
     </>
   );

@@ -55,7 +55,9 @@ model User {
   rewards      UserReward[]
   tokens       RewardToken[]
   spinLogs     SpinLog[]
-  wheelConfigs TierWheelConfig[]
+  wheelConfigs   TierWheelConfig[]
+  dailySettings  DailySettings?
+  dailyBonusClaims DailyBonusClaim[]
 }
 
 model Habit {
@@ -101,6 +103,28 @@ model RewardToken {
 
   @@index([userId, tier])
   @@index([userId, spentAt])
+}
+
+model DailySettings {
+  userId               String      @id
+  planningRewardTier   RewardTier?
+  allMustsRewardTier   RewardTier?
+  allDoDatesRewardTier RewardTier?
+  updatedAt            DateTime    @updatedAt
+  user                 User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DailyBonusClaim {
+  id        String     @id @default(cuid())
+  userId    String
+  dayKey    String
+  bonusType String
+  tier      RewardTier
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dayKey, bonusType])
+  @@index([userId, dayKey])
 }
 
 model TierWheelConfig {

@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 
+// Reuse one client per warm serverless instance (see Prisma serverless guidance).
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 export const prisma =

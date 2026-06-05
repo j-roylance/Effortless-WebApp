@@ -1,3 +1,7 @@
+/**
+ * Express application (shared by local dev and Vercel).
+ * Local entry: index.ts listens on a port. Production: api/index.ts imports this app.
+ */
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";

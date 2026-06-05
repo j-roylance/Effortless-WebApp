@@ -1,3 +1,6 @@
+/**
+ * Tier names and UI labels. Must match server tier order in server/src/domain/tiers.ts.
+ */
 export type RewardTier =
   | "Bronze"
   | "Silver"

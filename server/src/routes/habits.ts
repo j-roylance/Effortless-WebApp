@@ -22,6 +22,7 @@ habitsRouter.get("/", async (req: AuthedRequest, res) => {
   res.json({ habits });
 });
 
+/** Create habit and grant +1 Bronze token (habit_create). */
 habitsRouter.post("/", async (req: AuthedRequest, res) => {
   try {
     const body = habitBodySchema.parse(req.body);
@@ -102,6 +103,7 @@ habitsRouter.delete("/:id", async (req: AuthedRequest, res) => {
   res.json({ ok: true });
 });
 
+/** Mark habit achieved; grant token at habit tier; archive if one-time. */
 habitsRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
   const habitId = String(req.params.id);
   const habit = await prisma.habit.findFirst({

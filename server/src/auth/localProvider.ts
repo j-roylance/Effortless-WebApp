@@ -1,10 +1,12 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma.js";
-import type { AuthProvider, AuthUser } from "./providers.js";
 
 const BCRYPT_ROUNDS = 12;
 
-export class LocalProvider implements AuthProvider {
+export type AuthUser = { id: string; email: string };
+
+/** Email/password auth. User.googleId exists for future OAuth. */
+export class LocalProvider {
   async register(email: string, password: string): Promise<AuthUser> {
     const normalized = email.trim().toLowerCase();
     const existing = await prisma.user.findUnique({ where: { email: normalized } });

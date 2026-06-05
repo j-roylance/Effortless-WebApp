@@ -12,9 +12,9 @@ function resolveClientUrl(): string {
   return "http://localhost:5173";
 }
 
+/** Validated once at startup. Prisma reads DATABASE_URL from the environment directly. */
 export const env = {
   port: Number(process.env.PORT ?? 4000),
-  databaseUrl: required("DATABASE_URL"),
   jwtSecret: required("JWT_SECRET"),
   clientUrl: resolveClientUrl(),
 };

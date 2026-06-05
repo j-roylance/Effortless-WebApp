@@ -1,9 +1,15 @@
 node_modules/
 dist/
 server/dist/
+client/dist/
 .env
 .env.local
 *.log
 .DS_Store
 .vercel
 *.tsbuildinfo
+
+# Tooling installed outside the product (e.g. neonctl init)
+.agents/
+.claude/
+skills-lock.json

@@ -1,3 +1,4 @@
+/** HTTP client for /api. Uses cookies (credentials) and sends user timezone for schedule math. */
 const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 
 function getTimeZone(): string {
@@ -18,10 +19,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
+export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     credentials: "include",

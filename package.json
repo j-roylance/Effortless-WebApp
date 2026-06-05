@@ -1,6 +1,7 @@
 {
   "name": "effortless",
   "private": true,
+  "description": "Monorepo root: Vercel deploy config and API serverless handler",
   "devDependencies": {
     "@vercel/node": "^5.1.14"
   }

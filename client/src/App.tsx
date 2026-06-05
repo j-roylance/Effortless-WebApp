@@ -1,3 +1,8 @@
+/**
+ * Route map:
+ * - /login, /signup — guests only
+ * - /, /habits/*, /rewards — authenticated (see AppShell tabs)
+ */
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";

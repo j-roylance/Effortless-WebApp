@@ -1,3 +1,7 @@
+/**
+ * Spin randomizer: spends a token, rolls outcome, optionally awards a UserReward.
+ * Schedule caps use SpinLog + user timezone (X-Timezone header).
+ */
 import { RewardTier, SpinOutcome } from "@prisma/client";
 import {
   TIERS,

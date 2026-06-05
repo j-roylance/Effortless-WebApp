@@ -1,3 +1,7 @@
+/**
+ * Reward tier ordering and schedule limits.
+ * Keep client/src/domain/tiers.ts in sync for labels and colors.
+ */
 import { RewardTier } from "@prisma/client";
 
 export const TIERS: RewardTier[] = [
@@ -102,9 +106,6 @@ export function tierClaimLimit(tier: RewardTier): number {
   return TIER_LIMITS[tier].max;
 }
 
-export function canClaimTier(
-  tier: RewardTier,
-  claimCount: number
-): boolean {
+export function canClaimTier(tier: RewardTier, claimCount: number): boolean {
   return claimCount < TIER_LIMITS[tier].max;
 }

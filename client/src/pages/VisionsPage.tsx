@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Vision } from "../api/types";
+import { PageHeader } from "../components/PageHeader";
 import { VisionCard } from "../components/VisionCard";
 import { sortVisions } from "../domain/visions";
 
@@ -14,9 +15,7 @@ export function VisionsPage() {
 
   return (
     <>
-      <div className="page-header">
-        <h2 style={{ margin: 0, fontSize: "0.85rem" }}>Vision</h2>
-      </div>
+      <PageHeader title="Vision" />
 
       <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", marginTop: 0 }}>
         Life visions and the goal chains that lead to them.

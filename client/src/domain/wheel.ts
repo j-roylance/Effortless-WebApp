@@ -9,6 +9,7 @@ export interface TierWheelConfig {
   emptySlices: number;
 }
 
-export function totalWheelSlices(likeCount: number, multiplier: number): number {
+/** Same formula as server `totalSlices` in server/src/domain/wheel.ts */
+export function totalSlices(likeCount: number, multiplier: number): number {
   return Math.max(0, likeCount) * Math.max(1, multiplier);
 }

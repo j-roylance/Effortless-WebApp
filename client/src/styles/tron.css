@@ -77,11 +77,13 @@ h3,
 }
 
 .neon-input,
-.neon-select {
+.neon-select,
+.neon-textarea {
   width: 100%;
   padding: 0.65rem 0.75rem;
   font-family: var(--font-body);
   font-size: 1rem;
+  line-height: 1.45;
   color: var(--text);
   background: rgba(0, 0, 0, 0.5);
   border: 1px solid var(--border);
@@ -89,8 +91,14 @@ h3,
   outline: none;
 }
 
+.neon-textarea {
+  resize: vertical;
+  min-height: 5rem;
+}
+
 .neon-input:focus,
-.neon-select:focus {
+.neon-select:focus,
+.neon-textarea:focus {
   border-color: var(--cyan);
   box-shadow: 0 0 8px var(--cyan-dim);
 }
@@ -1023,48 +1031,10 @@ h3,
   }
 }
 
-.tab-bar--three a {
-  font-size: 0.58rem;
-  letter-spacing: 0.08em;
-  padding: 0.75rem 0.25rem;
-}
-
-.tab-bar--four a {
-  font-size: 0.48rem;
-  letter-spacing: 0.05em;
-  padding: 0.75rem 0.1rem;
-}
-
-.tab-bar--five a {
-  font-size: 0.42rem;
-  letter-spacing: 0.04em;
-  padding: 0.75rem 0.05rem;
-}
-
 .tab-bar--six a {
   font-size: 0.38rem;
   letter-spacing: 0.03em;
   padding: 0.7rem 0.02rem;
-}
-
-.neon-textarea {
-  width: 100%;
-  padding: 0.65rem 0.75rem;
-  font-family: var(--font-body);
-  font-size: 1rem;
-  line-height: 1.45;
-  color: var(--text);
-  background: rgba(0, 0, 0, 0.5);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  outline: none;
-  resize: vertical;
-  min-height: 5rem;
-}
-
-.neon-textarea:focus {
-  border-color: var(--cyan);
-  box-shadow: 0 0 8px var(--cyan-dim);
 }
 
 .ai-sections {

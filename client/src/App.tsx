@@ -1,9 +1,11 @@
 /**
- * Routes:
- * - /login, /signup — guests only
- * - /, /tasks/* — to-dos (achieve → tokens)
- * - /likes — things you enjoy (spin tokens → maybe win one)
- * - /calendar — day view of do/due dates
+ * Route map (see AGENTS.md for API pairing):
+ *
+ * Guest:     /login, /signup
+ * Onboarding /welcome (no tab bar; signup only)
+ * Shell:     / Tasks | /calendar | /likes | /daily-settings | /visions | /ai
+ *            /tasks/new, /tasks/:id/edit
+ *            /visions/new, /visions/:id/edit, /visions/:id/chain
  */
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";

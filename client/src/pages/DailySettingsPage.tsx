@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
+import { PageHeader } from "../components/PageHeader";
 import {
   OPTIONAL_TIER_OPTIONS,
   type DailySettings,
@@ -68,9 +69,7 @@ export function DailySettingsPage() {
 
   return (
     <>
-      <div className="page-header">
-        <h2 style={{ margin: 0, fontSize: "0.85rem" }}>Daily Settings</h2>
-      </div>
+      <PageHeader title="Daily Settings" />
 
       <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", marginTop: 0 }}>
         Choose bonus reward tokens for daily milestones. Select None to disable a reward.

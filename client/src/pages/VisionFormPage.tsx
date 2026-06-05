@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Vision } from "../api/types";
+import { PageHeader } from "../components/PageHeader";
 
 export function VisionFormPage() {
   const { id } = useParams();
@@ -62,18 +63,18 @@ export function VisionFormPage() {
 
   return (
     <>
-      <div className="page-header">
-        <h2 style={{ margin: 0, fontSize: "0.85rem" }}>
-          {isNew ? "New vision" : "Edit vision"}
-        </h2>
-        <button
-          type="button"
-          className="neon-btn neon-btn-sm"
-          onClick={() => navigate("/visions")}
-        >
-          Back
-        </button>
-      </div>
+      <PageHeader
+        title={isNew ? "New vision" : "Edit vision"}
+        action={
+          <button
+            type="button"
+            className="neon-btn neon-btn-sm"
+            onClick={() => navigate("/visions")}
+          >
+            Back
+          </button>
+        }
+      />
 
       <form
         className="neon-card"

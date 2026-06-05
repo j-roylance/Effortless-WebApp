@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { AchieveResult, BonusToken, Task } from "../api/types";
-import { TokenRewardModal } from "../components/TokenRewardModal";
+import { PageHeader } from "../components/PageHeader";
+import { TokenRewardModalHost } from "../components/TokenRewardModalHost";
+import { useTokenRewardFromNavigation } from "../hooks/useTokenRewardFromNavigation";
 import { useTokenRewardQueue } from "../hooks/useTokenRewardQueue";
 import { useAuth } from "../context/AuthContext";
 import { TaskFormPage } from "./TaskFormPage";
@@ -20,7 +22,6 @@ import {
 } from "../domain/calendar";
 import { toLocalDateInput } from "../domain/recurrence";
 import { TASK_SECTION_COLOR, normalizeSection } from "../domain/tasks";
-import type { RewardTier } from "../domain/tiers";
 
 function shiftDate(dateInput: string, deltaDays: number): string {
   const d = new Date(`${dateInput}T12:00:00`);
@@ -30,8 +31,6 @@ function shiftDate(dateInput: string, deltaDays: number): string {
 
 export function CalendarPage() {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const location = useLocation();
   const { user } = useAuth();
   const gridRef = useRef<HTMLDivElement>(null);
   const dragListenersRef = useRef<{ move: (e: PointerEvent) => void; up: () => void } | null>(
@@ -46,13 +45,7 @@ export function CalendarPage() {
   const [dragging, setDragging] = useState<CalendarEntry | null>(null);
   const [dragMinutes, setDragMinutes] = useState<number | null>(null);
 
-  useEffect(() => {
-    const state = location.state as { tokenReward?: RewardTier } | null;
-    if (state?.tokenReward) {
-      enqueueTokenReward([state.tokenReward]);
-      navigate("/calendar", { replace: true, state: {} });
-    }
-  }, [location.state, navigate, enqueueTokenReward]);
+  useTokenRewardFromNavigation(enqueueTokenReward, "/calendar");
 
   const { data: tasksData, isLoading } = useQuery({
     queryKey: ["tasks"],
@@ -187,9 +180,7 @@ export function CalendarPage() {
 
   return (
     <>
-      <div className="page-header">
-        <h2 style={{ margin: 0, fontSize: "0.85rem" }}>Calendar</h2>
-      </div>
+      <PageHeader title="Calendar" />
 
       <div className="calendar-toolbar neon-card">
         <div className="calendar-date-nav">
@@ -349,9 +340,7 @@ export function CalendarPage() {
         </div>
       )}
 
-      {tokenReward && (
-        <TokenRewardModal tier={tokenReward} onClose={dismissTokenReward} />
-      )}
+      <TokenRewardModalHost tier={tokenReward} onClose={dismissTokenReward} />
     </>
   );
 }

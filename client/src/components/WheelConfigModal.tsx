@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { UserLike } from "../api/types";
 import type { TierWheelConfig } from "../domain/wheel";
-import { totalWheelSlices } from "../domain/wheel";
+import { totalSlices } from "../domain/wheel";
 import { TIER_COLORS, type RewardTier } from "../domain/tiers";
 
 export function WheelConfigModal({
@@ -33,7 +33,7 @@ export function WheelConfigModal({
   }, [data]);
 
   const totalSlices = useMemo(
-    () => totalWheelSlices(likes.length, multiplier),
+    () => totalSlices(likes.length, multiplier),
     [likes.length, multiplier]
   );
 

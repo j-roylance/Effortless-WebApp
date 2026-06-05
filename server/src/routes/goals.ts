@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
+import { serializeVision } from "../domain/visions.js";
 import { createGoalPenultimate, serializeGoal } from "../services/goals.js";
 
 export const goalsRouter = Router({ mergeParams: true });
@@ -36,13 +37,7 @@ goalsRouter.get("/", async (req: AuthedRequest, res) => {
   });
 
   res.json({
-    vision: {
-      id: vision.id,
-      name: vision.name,
-      sortOrder: vision.sortOrder,
-      archivedAt: vision.archivedAt?.toISOString() ?? null,
-      createdAt: vision.createdAt.toISOString(),
-    },
+    vision: serializeVision(vision),
     goals: goals.map(serializeGoal),
   });
 });

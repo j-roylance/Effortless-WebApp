@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Goal, VisionWithGoals } from "../api/types";
 import { GoalChainNode } from "../components/GoalChainNode";
+import { PageHeader } from "../components/PageHeader";
 
 export function VisionChainPage() {
   const { id } = useParams();
@@ -58,12 +59,14 @@ export function VisionChainPage() {
 
   return (
     <>
-      <div className="page-header">
-        <h2 style={{ margin: 0, fontSize: "0.85rem" }}>Vision Chain</h2>
-        <Link to="/visions" className="neon-btn neon-btn-sm">
-          Back
-        </Link>
-      </div>
+      <PageHeader
+        title="Vision Chain"
+        action={
+          <Link to="/visions" className="neon-btn neon-btn-sm">
+            Back
+          </Link>
+        }
+      />
 
       {isLoading && <p className="empty-state">Loading chain…</p>}
 

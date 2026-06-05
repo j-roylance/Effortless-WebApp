@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
+/** Main chrome: header, bottom tabs, FAB on task and vision list routes only. */
 export function AppShell() {
   const { user, logout } = useAuth();
   const location = useLocation();

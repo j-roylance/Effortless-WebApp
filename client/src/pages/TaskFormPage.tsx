@@ -20,6 +20,7 @@ import {
   normalizeSection,
   type TaskSection,
 } from "../domain/tasks";
+import { PageHeader } from "../components/PageHeader";
 import { TIERS, type RewardTier } from "../domain/tiers";
 
 export function TaskFormPage({
@@ -226,14 +227,14 @@ export function TaskFormPage({
 
   return (
     <div className={embedded ? "task-form-embedded" : undefined}>
-      <div className="page-header">
-        <h2 style={{ margin: 0, fontSize: "0.85rem" }}>
-          {isNew ? "New task" : "Edit task"}
-        </h2>
-        <button type="button" className="neon-btn neon-btn-sm" onClick={handleBack}>
-          Back
-        </button>
-      </div>
+      <PageHeader
+        title={isNew ? "New task" : "Edit task"}
+        action={
+          <button type="button" className="neon-btn neon-btn-sm" onClick={handleBack}>
+            Back
+          </button>
+        }
+      />
 
       <form
         className={embedded ? undefined : "neon-card"}

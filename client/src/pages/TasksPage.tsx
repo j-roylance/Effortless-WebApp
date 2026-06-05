@@ -3,9 +3,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { AchieveResult, Task, TokenBalances } from "../api/types";
+import { PageHeader } from "../components/PageHeader";
 import { TaskCard } from "../components/TaskCard";
 import { Toast } from "../components/Toast";
-import { TokenRewardModal } from "../components/TokenRewardModal";
+import { TokenRewardModalHost } from "../components/TokenRewardModalHost";
+import { useTokenRewardFromNavigation } from "../hooks/useTokenRewardFromNavigation";
 import { useTokenRewardQueue } from "../hooks/useTokenRewardQueue";
 import { isTaskPastDue } from "../domain/recurrence";
 import {
@@ -14,7 +16,7 @@ import {
   groupTasksBySection,
   type TaskSection,
 } from "../domain/tasks";
-import { TIERS, type RewardTier } from "../domain/tiers";
+import { TIERS } from "../domain/tiers";
 
 function TaskSectionBlock({
   section,
@@ -67,16 +69,15 @@ export function TasksPage() {
   const { current: tokenReward, enqueue: enqueueTokenReward, dismissCurrent: dismissTokenReward } =
     useTokenRewardQueue();
 
+  useTokenRewardFromNavigation(enqueueTokenReward, location.pathname);
+
   useEffect(() => {
-    const state = location.state as { tokenReward?: RewardTier; toast?: string } | null;
-    if (state?.tokenReward) {
-      enqueueTokenReward([state.tokenReward]);
-      navigate(location.pathname, { replace: true, state: {} });
-    } else if (state?.toast) {
+    const state = location.state as { toast?: string } | null;
+    if (state?.toast) {
       setToast(state.toast);
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.state, location.pathname, navigate, enqueueTokenReward]);
+  }, [location.state, location.pathname, navigate]);
 
   const { data: tasksData, isLoading } = useQuery({
     queryKey: ["tasks"],
@@ -116,16 +117,18 @@ export function TasksPage() {
 
   return (
     <>
-      <div className="page-header">
-        <h2 style={{ margin: 0, fontSize: "0.85rem" }}>Tasks</h2>
-        <button
-          type="button"
-          className="token-chip"
-          onClick={() => setShowTokens((v) => !v)}
-        >
-          {totalTokens} tokens
-        </button>
-      </div>
+      <PageHeader
+        title="Tasks"
+        action={
+          <button
+            type="button"
+            className="token-chip"
+            onClick={() => setShowTokens((v) => !v)}
+          >
+            {totalTokens} tokens
+          </button>
+        }
+      />
 
       {showTokens && balances && (
         <div className="token-panel neon-card" style={{ marginBottom: "1rem" }}>
@@ -183,9 +186,7 @@ export function TasksPage() {
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
-      {tokenReward && (
-        <TokenRewardModal tier={tokenReward} onClose={dismissTokenReward} />
-      )}
+      <TokenRewardModalHost tier={tokenReward} onClose={dismissTokenReward} />
     </>
   );
 }

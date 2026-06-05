@@ -8,6 +8,7 @@ import {
   TIER_FREQUENCY_LABEL,
   type RewardTier,
 } from "../domain/tiers";
+import { PageHeader } from "../components/PageHeader";
 import { RandomizerModal } from "../components/RandomizerModal";
 import { WheelConfigModal } from "../components/WheelConfigModal";
 
@@ -59,9 +60,7 @@ export function LikesPage() {
 
   return (
     <>
-      <div className="page-header">
-        <h2 style={{ margin: 0, fontSize: "0.85rem" }}>Likes</h2>
-      </div>
+      <PageHeader title="Likes" />
       <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", marginTop: 0 }}>
         Things you enjoy at each tier. Spend tokens to spin and maybe win one.
       </p>

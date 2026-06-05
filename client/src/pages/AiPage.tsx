@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageHeader } from "../components/PageHeader";
 import { buildGoalBreakdownPrompt, buildVisionBreakdownPrompt } from "../domain/ai-prompts";
 
 function PromptOutput({
@@ -116,9 +117,7 @@ export function AiPage() {
 
   return (
     <>
-      <div className="page-header">
-        <h2 style={{ margin: 0, fontSize: "0.85rem" }}>AI</h2>
-      </div>
+      <PageHeader title="AI" />
 
       <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", marginTop: 0 }}>
         Fill in your answers, generate a prompt, and paste it into your favorite AI assistant.

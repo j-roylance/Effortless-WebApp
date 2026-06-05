@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import type { RewardTier } from "../domain/tiers";
 
+/** Queue tier modals so task achieve can show task token then daily bonuses in sequence. */
 export function useTokenRewardQueue() {
   const [queue, setQueue] = useState<RewardTier[]>([]);
 

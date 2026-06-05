@@ -1,8 +1,8 @@
-import type { Vision } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
+import { serializeVision } from "../domain/visions.js";
 import { nextVisionSortOrder } from "../services/goals.js";
 import { goalsRouter } from "./goals.js";
 
@@ -12,16 +12,6 @@ visionsRouter.use(requireAuth);
 const visionBodySchema = z.object({
   name: z.string().min(1).max(200),
 });
-
-function serializeVision(vision: Vision) {
-  return {
-    id: vision.id,
-    name: vision.name,
-    sortOrder: vision.sortOrder,
-    archivedAt: vision.archivedAt?.toISOString() ?? null,
-    createdAt: vision.createdAt.toISOString(),
-  };
-}
 
 visionsRouter.get("/", async (req: AuthedRequest, res) => {
   const visions = await prisma.vision.findMany({

@@ -5,6 +5,7 @@ import { TIER_COLORS } from "../domain/tiers";
 interface Slice {
   id: string;
   label: string;
+  empty?: boolean;
 }
 
 export function SpinnerWheel({
@@ -55,7 +56,11 @@ export function SpinnerWheel({
     .map((_, i) => {
       const start = (i / slices.length) * 100;
       const end = ((i + 1) / slices.length) * 100;
-      const shade = i % 2 === 0 ? "rgba(0,243,255,0.15)" : "rgba(0,0,0,0.6)";
+      const shade = slices[i]?.empty
+        ? "rgba(80,80,90,0.55)"
+        : i % 2 === 0
+          ? "rgba(0,243,255,0.15)"
+          : "rgba(0,0,0,0.6)";
       return `${shade} ${start}% ${end}%`;
     })
     .join(", ");
@@ -95,7 +100,11 @@ export function SpinnerWheel({
                 whiteSpace: "nowrap",
               }}
             >
-              {slice.label.length > 14 ? `${slice.label.slice(0, 12)}…` : slice.label}
+              {slice.empty
+                ? "Empty"
+                : slice.label.length > 14
+                  ? `${slice.label.slice(0, 12)}…`
+                  : slice.label}
             </span>
           );
         })}

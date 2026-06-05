@@ -36,8 +36,7 @@ export function RandomizerModal({
       setTimeout(() => {
         const needsSpinner =
           (data.outcome === "Win" || data.outcome === "LevelUp") &&
-          data.spinnerLikes.length > 0 &&
-          data.like;
+          data.spinnerLikes.length > 0;
         if (needsSpinner) {
           setPhase("spinning");
         } else {

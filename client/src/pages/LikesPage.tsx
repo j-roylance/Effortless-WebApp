@@ -9,10 +9,12 @@ import {
   type RewardTier,
 } from "../domain/tiers";
 import { RandomizerModal } from "../components/RandomizerModal";
+import { WheelConfigModal } from "../components/WheelConfigModal";
 
 export function LikesPage() {
   const queryClient = useQueryClient();
   const [spinTier, setSpinTier] = useState<RewardTier | null>(null);
+  const [wheelEditTier, setWheelEditTier] = useState<RewardTier | null>(null);
   const [newLabels, setNewLabels] = useState<Record<RewardTier, string>>(
     () => Object.fromEntries(TIERS.map((t) => [t, ""])) as Record<RewardTier, string>
   );
@@ -73,16 +75,27 @@ export function LikesPage() {
         return (
           <section key={tier} className="like-section neon-card">
             <div className="like-section-header">
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: "0.8rem",
-                  color: TIER_COLORS[tier],
-                  fontFamily: "var(--font-display)",
-                }}
-              >
-                {tier}
-              </h3>
+              <div className="like-tier-title-row">
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "0.8rem",
+                    color: TIER_COLORS[tier],
+                    fontFamily: "var(--font-display)",
+                  }}
+                >
+                  {tier}
+                </h3>
+                <button
+                  type="button"
+                  className="icon-btn wheel-edit-btn"
+                  aria-label={`Edit ${tier} wheel odds`}
+                  title="Edit wheel odds"
+                  onClick={() => setWheelEditTier(tier)}
+                >
+                  ✎
+                </button>
+              </div>
               <button
                 type="button"
                 className="neon-btn neon-btn-sm"
@@ -163,6 +176,14 @@ export function LikesPage() {
 
       {spinTier && (
         <RandomizerModal tokenTier={spinTier} onClose={() => setSpinTier(null)} />
+      )}
+
+      {wheelEditTier && (
+        <WheelConfigModal
+          tier={wheelEditTier}
+          likes={likesByTier[wheelEditTier]}
+          onClose={() => setWheelEditTier(null)}
+        />
       )}
     </>
   );

@@ -55,6 +55,7 @@ model User {
   rewards      UserReward[]
   tokens       RewardToken[]
   spinLogs     SpinLog[]
+  wheelConfigs TierWheelConfig[]
 }
 
 model Habit {
@@ -100,6 +101,20 @@ model RewardToken {
 
   @@index([userId, tier])
   @@index([userId, spentAt])
+}
+
+model TierWheelConfig {
+  id          String     @id @default(cuid())
+  userId      String
+  tier        RewardTier
+  multiplier  Int        @default(1)
+  sliceCounts Json       @default("{}")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tier])
+  @@index([userId])
 }
 
 model SpinLog {

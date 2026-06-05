@@ -41,11 +41,17 @@ export interface TokenBalances {
   >;
 }
 
+export interface SpinWheelSlice {
+  id: string;
+  label: string;
+  empty: boolean;
+}
+
 export interface SpinResult {
   outcome: SpinOutcome;
   effectiveTier: RewardTier;
   like?: { id: string; label: string };
-  spinnerLikes: { id: string; label: string }[];
+  spinnerLikes: SpinWheelSlice[];
   winningIndex: number;
   tokenBalances: Record<RewardTier, number>;
   newTokenFromLevelUp: boolean;

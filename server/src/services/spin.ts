@@ -13,6 +13,11 @@ import {
 } from "../domain/tiers.js";
 import { prisma } from "../lib/prisma.js";
 import { getTokenBalances } from "./tokens.js";
+import {
+  buildWheelSlices,
+  parseSliceCounts,
+  pickWheelWinner,
+} from "../domain/wheel.js";
 
 const OUTCOMES: SpinOutcome[] = [
   SpinOutcome.Win,
@@ -55,11 +60,17 @@ async function countClaimsInBucket(
   });
 }
 
+export interface SpinWheelSlice {
+  id: string;
+  label: string;
+  empty: boolean;
+}
+
 export interface SpinResult {
   outcome: SpinOutcome;
   effectiveTier: RewardTier;
   like?: { id: string; label: string };
-  spinnerLikes: { id: string; label: string }[];
+  spinnerLikes: SpinWheelSlice[];
   winningIndex: number;
   tokenBalances: Record<RewardTier, number>;
   newTokenFromLevelUp: boolean;
@@ -119,7 +130,7 @@ export async function executeSpin(
     }
 
     let reward: { id: string; label: string } | undefined;
-    let spinnerRewards: { id: string; label: string }[] = [];
+    let spinnerRewards: SpinWheelSlice[] = [];
     let winningIndex = 0;
     let newTokenFromLevelUp = false;
 
@@ -132,14 +143,32 @@ export async function executeSpin(
         orderBy: { createdAt: "asc" },
       });
 
-      spinnerRewards = pool.map((r) => ({ id: r.id, label: r.label }));
-
       if (pool.length === 0) {
         outcome = SpinOutcome.NoReward;
       } else {
-        winningIndex = Math.floor(Math.random() * pool.length);
-        const picked = pool[winningIndex]!;
-        reward = { id: picked.id, label: picked.label };
+        const wheelConfig = await tx.tierWheelConfig.findUnique({
+          where: { userId_tier: { userId, tier: effectiveTier } },
+        });
+
+        const slices = buildWheelSlices(
+          pool.map((r) => ({ id: r.id, label: r.label })),
+          wheelConfig
+            ? {
+                multiplier: wheelConfig.multiplier,
+                sliceCounts: parseSliceCounts(wheelConfig.sliceCounts),
+              }
+            : null
+        );
+
+        spinnerRewards = slices.map((s) => ({
+          id: s.id,
+          label: s.label,
+          empty: s.empty,
+        }));
+
+        const picked = pickWheelWinner(slices);
+        winningIndex = picked.winningIndex;
+        reward = picked.like;
       }
     }
 

@@ -349,6 +349,125 @@ h3,
   cursor: wait;
 }
 
+.schedule-fieldset {
+  border: 1px solid rgba(0, 243, 255, 0.15);
+  border-radius: 4px;
+  padding: 0.75rem;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.schedule-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.schedule-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.schedule-sub-label {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.schedule-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.datetime-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.recurrence-type-row {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.day-picker-row {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.day-pill {
+  padding: 0.35rem 0.5rem;
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.day-pill.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(0, 243, 255, 0.12);
+}
+
+.month-day-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+}
+
+.day-pill--compact {
+  padding: 0.25rem 0;
+  font-size: 0.55rem;
+}
+
+.task-schedule-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.task-due-overdue {
+  color: var(--danger);
+}
+
+.task-card--past-due {
+  border-color: rgba(255, 68, 102, 0.55);
+}
+
+.past-due-block {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(255, 68, 102, 0.35);
+}
+
+.past-due-title {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  font-family: var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--danger);
+  text-shadow: 0 0 10px rgba(255, 68, 102, 0.35);
+}
+
+.task-section--past-due-nested {
+  margin-bottom: 1rem;
+}
+
 .task-list {
   display: flex;
   flex-direction: column;

@@ -1,17 +1,60 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Task, TokenBalances } from "../api/types";
+import { TaskCard } from "../components/TaskCard";
+import { Toast } from "../components/Toast";
+import { isTaskPastDue } from "../domain/recurrence";
 import {
   TASK_SECTIONS,
   TASK_SECTION_LABEL,
-  normalizeSection,
+  groupTasksBySection,
   type TaskSection,
 } from "../domain/tasks";
 import { TIERS, type RewardTier } from "../domain/tiers";
-import { TierBadge } from "../components/TierBadge";
-import { Toast } from "../components/Toast";
+
+function TaskSectionBlock({
+  section,
+  tasks,
+  pastDue,
+  onAchieve,
+  achieving,
+}: {
+  section: TaskSection;
+  tasks: Task[];
+  pastDue?: boolean;
+  onAchieve: (id: string) => void;
+  achieving: boolean;
+}) {
+  const sectionClass = section.toLowerCase();
+
+  return (
+    <section
+      className={`task-section task-section--${sectionClass}${
+        pastDue ? " task-section--past-due-nested" : ""
+      }`}
+    >
+      <h3 className="task-section-title">{TASK_SECTION_LABEL[section]}</h3>
+
+      {tasks.length === 0 ? (
+        <p className="task-section-empty">No {sectionClass} tasks</p>
+      ) : (
+        <div className="task-list">
+          {tasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              pastDue={pastDue}
+              onAchieve={onAchieve}
+              achieving={achieving}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 export function TasksPage() {
   const queryClient = useQueryClient();
@@ -50,22 +93,16 @@ export function TasksPage() {
   });
 
   const tasks = tasksData?.tasks ?? [];
-  const tasksBySection = useMemo(() => {
-    const grouped = Object.fromEntries(
-      TASK_SECTIONS.map((section) => [section, [] as Task[]])
-    ) as Record<TaskSection, Task[]>;
-
-    for (const task of tasks) {
-      grouped[normalizeSection(task.section)].push(task);
-    }
-
-    return grouped;
-  }, [tasks]);
+  const activeBySection = useMemo(() => groupTasksBySection(tasks, false), [tasks]);
+  const pastDueBySection = useMemo(() => groupTasksBySection(tasks, true), [tasks]);
+  const hasPastDue = useMemo(() => tasks.some((t) => isTaskPastDue(t.dueAt)), [tasks]);
 
   const balances = tokenData?.balances;
   const totalTokens = balances
     ? TIERS.reduce((sum, t) => sum + (balances[t] ?? 0), 0)
     : 0;
+
+  const handleAchieve = (id: string) => achieveMutation.mutate(id);
 
   return (
     <>
@@ -108,68 +145,31 @@ export function TasksPage() {
       )}
 
       {!isLoading &&
-        TASK_SECTIONS.map((section) => {
-          const sectionTasks = tasksBySection[section];
-          const sectionClass = section.toLowerCase();
+        TASK_SECTIONS.map((section) => (
+          <TaskSectionBlock
+            key={section}
+            section={section}
+            tasks={activeBySection[section]}
+            onAchieve={handleAchieve}
+            achieving={achieveMutation.isPending}
+          />
+        ))}
 
-          return (
-            <section
-              key={section}
-              className={`task-section task-section--${sectionClass}`}
-            >
-              <h3 className="task-section-title">{TASK_SECTION_LABEL[section]}</h3>
-
-              {sectionTasks.length === 0 ? (
-                <p className="task-section-empty">No {sectionClass} tasks</p>
-              ) : (
-                <div className="task-list">
-                  {sectionTasks.map((task) => (
-                    <article key={task.id} className="task-card neon-card">
-                      <div className="task-card-header">
-                        <div>
-                          <h4 style={{ margin: "0 0 0.35rem", fontSize: "1.1rem" }}>
-                            {task.name}
-                          </h4>
-                          <TierBadge tier={task.tier} />
-                          {!task.persistAfterDone && (
-                            <span
-                              style={{
-                                marginLeft: "0.5rem",
-                                fontSize: "0.7rem",
-                                color: "var(--text-dim)",
-                              }}
-                            >
-                              One-time
-                            </span>
-                          )}
-                        </div>
-                        <Link
-                          to={`/tasks/${task.id}/edit`}
-                          className="icon-btn"
-                          aria-label="Edit task"
-                        >
-                          ✎
-                        </Link>
-                      </div>
-
-                      <div className="task-card-actions">
-                        <button
-                          type="button"
-                          className="neon-btn neon-btn-primary"
-                          style={{ flex: 1 }}
-                          onClick={() => achieveMutation.mutate(task.id)}
-                          disabled={achieveMutation.isPending}
-                        >
-                          Achieve
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
-          );
-        })}
+      {!isLoading && hasPastDue && (
+        <section className="past-due-block">
+          <h2 className="past-due-title">Past Due</h2>
+          {TASK_SECTIONS.map((section) => (
+            <TaskSectionBlock
+              key={`past-${section}`}
+              section={section}
+              tasks={pastDueBySection[section]}
+              pastDue
+              onAchieve={handleAchieve}
+              achieving={achieveMutation.isPending}
+            />
+          ))}
+        </section>
+      )}
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </>

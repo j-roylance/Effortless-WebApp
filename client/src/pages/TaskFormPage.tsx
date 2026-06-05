@@ -4,6 +4,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Task } from "../api/types";
 import {
+  RECURRENCE_LABEL,
+  TASK_RECURRENCES,
+  WEEKDAY_LABELS,
+  toISOFromLocal,
+  toLocalDateInput,
+  toLocalTimeInput,
+  type RecurrenceConfig,
+  type TaskRecurrence,
+} from "../domain/recurrence";
+import {
   TASK_SECTIONS,
   TASK_SECTION_COLOR,
   TASK_SECTION_LABEL,
@@ -24,6 +34,20 @@ export function TaskFormPage() {
   const [persistAfterDone, setPersistAfterDone] = useState(true);
   const [error, setError] = useState("");
 
+  const [enableScheduled, setEnableScheduled] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState("");
+  const [scheduledTime, setScheduledTime] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState("");
+
+  const [enableDue, setEnableDue] = useState(false);
+  const [dueDate, setDueDate] = useState("");
+  const [dueTime, setDueTime] = useState("");
+
+  const [recurrence, setRecurrence] = useState<TaskRecurrence>("None");
+  const [recurrenceTime, setRecurrenceTime] = useState("09:00");
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
+  const [daysOfMonth, setDaysOfMonth] = useState<number[]>([]);
+
   const { data } = useQuery({
     queryKey: ["tasks"],
     queryFn: () => api<{ tasks: Task[] }>("/tasks"),
@@ -38,13 +62,84 @@ export function TaskFormPage() {
         setTier(task.tier);
         setSection(normalizeSection(task.section));
         setPersistAfterDone(task.persistAfterDone);
+
+        setEnableScheduled(!!task.scheduledAt);
+        setScheduledDate(toLocalDateInput(task.scheduledAt));
+        setScheduledTime(toLocalTimeInput(task.scheduledAt) || "09:00");
+        setDurationMinutes(task.durationMinutes ? String(task.durationMinutes) : "");
+
+        setEnableDue(!!task.dueAt);
+        setDueDate(toLocalDateInput(task.dueAt));
+        setDueTime(toLocalTimeInput(task.dueAt) || "17:00");
+
+        setRecurrence(task.recurrence);
+        const cfg = task.recurrenceConfig;
+        setRecurrenceTime(cfg?.time ?? "09:00");
+        setDaysOfWeek(cfg?.daysOfWeek ?? []);
+        setDaysOfMonth(cfg?.daysOfMonth ?? []);
       }
     }
   }, [isNew, id, data]);
 
+  function toggleDayOfWeek(day: number) {
+    setDaysOfWeek((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b)
+    );
+  }
+
+  function toggleDayOfMonth(day: number) {
+    setDaysOfMonth((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b)
+    );
+  }
+
+  function buildRecurrenceConfig(): RecurrenceConfig | null {
+    if (recurrence === "None") return null;
+    const config: RecurrenceConfig = { time: recurrenceTime };
+    if (recurrence === "Weekly") config.daysOfWeek = daysOfWeek;
+    if (recurrence === "Monthly") config.daysOfMonth = daysOfMonth;
+    return config;
+  }
+
+  function validateForm(): string | null {
+    if (!name.trim()) return "Name is required";
+    if (enableScheduled && (!scheduledDate || !scheduledTime)) {
+      return "Do date requires a date and time";
+    }
+    if (enableDue && (!dueDate || !dueTime)) {
+      return "Due date requires a date and time";
+    }
+    if (recurrence === "Weekly" && daysOfWeek.length === 0) {
+      return "Pick at least one day for weekly recurrence";
+    }
+    if (recurrence === "Monthly" && daysOfMonth.length === 0) {
+      return "Pick at least one day for monthly recurrence";
+    }
+    return null;
+  }
+
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const body = { name, tier, section, persistAfterDone };
+      const validationError = validateForm();
+      if (validationError) throw new Error(validationError);
+
+      const body = {
+        name,
+        tier,
+        section,
+        persistAfterDone,
+        scheduledAt: enableScheduled
+          ? toISOFromLocal(scheduledDate, scheduledTime)
+          : null,
+        durationMinutes:
+          enableScheduled && durationMinutes
+            ? Number.parseInt(durationMinutes, 10)
+            : null,
+        dueAt: enableDue ? toISOFromLocal(dueDate, dueTime) : null,
+        recurrence,
+        recurrenceConfig: buildRecurrenceConfig(),
+      };
+
       if (isNew) {
         return api<{ task: Task; token: { tier: RewardTier } }>("/tasks", {
           method: "POST",
@@ -78,10 +173,12 @@ export function TaskFormPage() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim()) {
-      setError("Name is required");
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
       return;
     }
+    setError("");
     saveMutation.mutate();
   }
 
@@ -96,7 +193,11 @@ export function TaskFormPage() {
         </button>
       </div>
 
-      <form className="neon-card" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <form
+        className="neon-card"
+        onSubmit={handleSubmit}
+        style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+      >
         {error && <p className="form-error">{error}</p>}
 
         <div className="form-field">
@@ -111,7 +212,14 @@ export function TaskFormPage() {
         </div>
 
         <div className="form-field">
-          <span style={{ display: "block", marginBottom: "0.35rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>
+          <span
+            style={{
+              display: "block",
+              marginBottom: "0.35rem",
+              color: "var(--text-dim)",
+              fontSize: "0.85rem",
+            }}
+          >
             Section
           </span>
           <div className="task-section-picker">
@@ -145,8 +253,156 @@ export function TaskFormPage() {
           </select>
         </div>
 
+        <fieldset className="schedule-fieldset">
+          <label className="schedule-toggle">
+            <input
+              type="checkbox"
+              checked={enableScheduled}
+              onChange={(e) => setEnableScheduled(e.target.checked)}
+            />
+            Set do date &amp; planned length
+          </label>
+          {enableScheduled && (
+            <div className="schedule-fields">
+              <div className="datetime-row">
+                <input
+                  type="date"
+                  className="neon-input"
+                  value={scheduledDate}
+                  onChange={(e) => setScheduledDate(e.target.value)}
+                />
+                <input
+                  type="time"
+                  className="neon-input"
+                  value={scheduledTime}
+                  onChange={(e) => setScheduledTime(e.target.value)}
+                />
+              </div>
+              <label htmlFor="duration" className="schedule-sub-label">
+                Planned length (minutes)
+              </label>
+              <input
+                id="duration"
+                type="number"
+                min={1}
+                max={1440}
+                className="neon-input"
+                placeholder="e.g. 30"
+                value={durationMinutes}
+                onChange={(e) => setDurationMinutes(e.target.value)}
+              />
+            </div>
+          )}
+        </fieldset>
+
+        <fieldset className="schedule-fieldset">
+          <label className="schedule-toggle">
+            <input
+              type="checkbox"
+              checked={enableDue}
+              onChange={(e) => setEnableDue(e.target.checked)}
+            />
+            Set due date
+          </label>
+          {enableDue && (
+            <div className="schedule-fields">
+              <div className="datetime-row">
+                <input
+                  type="date"
+                  className="neon-input"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                />
+                <input
+                  type="time"
+                  className="neon-input"
+                  value={dueTime}
+                  onChange={(e) => setDueTime(e.target.value)}
+                />
+              </div>
+              <p className="schedule-hint">After this time the task moves to Past Due.</p>
+            </div>
+          )}
+        </fieldset>
+
+        <fieldset className="schedule-fieldset">
+          <span className="schedule-sub-label">Repeating do date</span>
+          <div className="recurrence-type-row">
+            {TASK_RECURRENCES.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`section-pill${recurrence === option ? " active" : ""}`}
+                style={{ "--pill-color": "var(--cyan)" } as CSSProperties}
+                onClick={() => setRecurrence(option)}
+              >
+                {option === "None" ? "None" : RECURRENCE_LABEL[option]}
+              </button>
+            ))}
+          </div>
+          {recurrence !== "None" && (
+            <div className="schedule-fields">
+              <label htmlFor="recurrenceTime" className="schedule-sub-label">
+                Time of day
+              </label>
+              <input
+                id="recurrenceTime"
+                type="time"
+                className="neon-input"
+                value={recurrenceTime}
+                onChange={(e) => setRecurrenceTime(e.target.value)}
+              />
+
+              {recurrence === "Weekly" && (
+                <>
+                  <span className="schedule-sub-label">Days of week</span>
+                  <div className="day-picker-row">
+                    {WEEKDAY_LABELS.map((label, index) => (
+                      <button
+                        key={label}
+                        type="button"
+                        className={`day-pill${daysOfWeek.includes(index) ? " active" : ""}`}
+                        onClick={() => toggleDayOfWeek(index)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {recurrence === "Monthly" && (
+                <>
+                  <span className="schedule-sub-label">Days of month</span>
+                  <div className="month-day-grid">
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        className={`day-pill day-pill--compact${
+                          daysOfMonth.includes(day) ? " active" : ""
+                        }`}
+                        onClick={() => toggleDayOfMonth(day)}
+                      >
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </fieldset>
+
         <div className="form-field">
-          <span style={{ display: "block", marginBottom: "0.35rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>
+          <span
+            style={{
+              display: "block",
+              marginBottom: "0.35rem",
+              color: "var(--text-dim)",
+              fontSize: "0.85rem",
+            }}
+          >
             After achieved
           </span>
           <div className="radio-group">

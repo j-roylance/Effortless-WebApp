@@ -1,3 +1,4 @@
+import type { RecurrenceConfig, TaskRecurrence } from "../domain/recurrence";
 import type { TaskSection } from "../domain/tasks";
 import type { RewardTier, SpinOutcome } from "../domain/tiers";
 
@@ -12,6 +13,11 @@ export interface Task {
   name: string;
   tier: RewardTier;
   section: TaskSection;
+  scheduledAt: string | null;
+  durationMinutes: number | null;
+  dueAt: string | null;
+  recurrence: TaskRecurrence;
+  recurrenceConfig: RecurrenceConfig | null;
   persistAfterDone: boolean;
   sortOrder: number;
   achievedAt: string | null;

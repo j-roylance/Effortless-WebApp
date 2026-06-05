@@ -15,3 +15,8 @@ export function normalizeSection(value: string | null | undefined): TaskSection 
   if (value && isValidSection(value)) return value;
   return TaskSection.Could;
 }
+
+export function isTaskPastDue(dueAt: Date | null | undefined, now = new Date()): boolean {
+  if (!dueAt) return false;
+  return dueAt < now;
+}

@@ -2,10 +2,10 @@ import { FormEvent, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { Habit } from "../api/types";
+import type { Task } from "../api/types";
 import { TIERS, type RewardTier } from "../domain/tiers";
 
-export function HabitFormPage() {
+export function TaskFormPage() {
   const { id } = useParams();
   const isNew = !id || id === "new";
   const navigate = useNavigate();
@@ -17,18 +17,18 @@ export function HabitFormPage() {
   const [error, setError] = useState("");
 
   const { data } = useQuery({
-    queryKey: ["habits"],
-    queryFn: () => api<{ habits: Habit[] }>("/habits"),
+    queryKey: ["tasks"],
+    queryFn: () => api<{ tasks: Task[] }>("/tasks"),
     enabled: !isNew,
   });
 
   useEffect(() => {
-    if (!isNew && data?.habits) {
-      const habit = data.habits.find((h) => h.id === id);
-      if (habit) {
-        setName(habit.name);
-        setTier(habit.tier);
-        setPersistAfterDone(habit.persistAfterDone);
+    if (!isNew && data?.tasks) {
+      const task = data.tasks.find((t) => t.id === id);
+      if (task) {
+        setName(task.name);
+        setTier(task.tier);
+        setPersistAfterDone(task.persistAfterDone);
       }
     }
   }, [isNew, id, data]);
@@ -37,18 +37,18 @@ export function HabitFormPage() {
     mutationFn: async () => {
       const body = { name, tier, persistAfterDone };
       if (isNew) {
-        return api<{ habit: Habit; token: { tier: RewardTier } }>("/habits", {
+        return api<{ task: Task; token: { tier: RewardTier } }>("/tasks", {
           method: "POST",
           body: JSON.stringify(body),
         });
       }
-      return api<{ habit: Habit }>(`/habits/${id}`, {
+      return api<{ task: Task }>(`/tasks/${id}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["habits"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
       if (isNew && "token" in data) {
         navigate("/", { state: { toast: `+1 ${data.token.tier} Token` } });
@@ -60,9 +60,9 @@ export function HabitFormPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => api(`/habits/${id}`, { method: "DELETE" }),
+    mutationFn: () => api(`/tasks/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["habits"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
       navigate("/");
     },
   });
@@ -80,7 +80,7 @@ export function HabitFormPage() {
     <div>
       <div className="page-header">
         <h2 style={{ margin: 0, fontSize: "0.85rem" }}>
-          {isNew ? "New habit" : "Edit habit"}
+          {isNew ? "New task" : "Edit task"}
         </h2>
         <button type="button" className="neon-btn neon-btn-sm" onClick={() => navigate("/")}>
           Back
@@ -91,7 +91,7 @@ export function HabitFormPage() {
         {error && <p className="form-error">{error}</p>}
 
         <div className="form-field">
-          <label htmlFor="name">Habit name</label>
+          <label htmlFor="name">Task name</label>
           <input
             id="name"
             className="neon-input"
@@ -102,7 +102,7 @@ export function HabitFormPage() {
         </div>
 
         <div className="form-field">
-          <label htmlFor="tier">Reward tier</label>
+          <label htmlFor="tier">Tier when achieved</label>
           <select
             id="tier"
             className="neon-select"
@@ -145,7 +145,7 @@ export function HabitFormPage() {
 
         {isNew && (
           <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-dim)" }}>
-            Saving a new habit earns +1 Bronze Token.
+            Adding a new task earns +1 Bronze Token.
           </p>
         )}
 
@@ -163,7 +163,7 @@ export function HabitFormPage() {
             className="neon-btn"
             style={{ borderColor: "var(--danger)", color: "var(--danger)" }}
             onClick={() => {
-              if (confirm("Delete this habit?")) deleteMutation.mutate();
+              if (confirm("Delete this task?")) deleteMutation.mutate();
             }}
           >
             Delete

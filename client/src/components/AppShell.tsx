@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 export function AppShell() {
   const { user, logout } = useAuth();
   const location = useLocation();
-  const isHabitsList = location.pathname === "/";
+  const isTasksList = location.pathname === "/";
 
   return (
     <div className="app-shell">
@@ -34,18 +34,18 @@ export function AppShell() {
         <Outlet />
       </main>
 
-      {isHabitsList && (
-        <NavLink to="/habits/new" className="fab" aria-label="Add habit">
+      {isTasksList && (
+        <NavLink to="/tasks/new" className="fab" aria-label="Add task">
           +
         </NavLink>
       )}
 
       <nav className="tab-bar">
         <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
-          Habits
+          Tasks
         </NavLink>
-        <NavLink to="/rewards" className={({ isActive }) => (isActive ? "active" : "")}>
-          Rewards
+        <NavLink to="/likes" className={({ isActive }) => (isActive ? "active" : "")}>
+          Likes
         </NavLink>
       </nav>
     </div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { TokenBalances, UserReward } from "../api/types";
+import type { TokenBalances, UserLike } from "../api/types";
 import {
   TIERS,
   TIER_COLORS,
@@ -10,16 +10,16 @@ import {
 } from "../domain/tiers";
 import { RandomizerModal } from "../components/RandomizerModal";
 
-export function RewardsPage() {
+export function LikesPage() {
   const queryClient = useQueryClient();
   const [spinTier, setSpinTier] = useState<RewardTier | null>(null);
   const [newLabels, setNewLabels] = useState<Record<RewardTier, string>>(
     () => Object.fromEntries(TIERS.map((t) => [t, ""])) as Record<RewardTier, string>
   );
 
-  const { data: rewardsData } = useQuery({
-    queryKey: ["rewards"],
-    queryFn: () => api<{ rewards: UserReward[] }>("/rewards"),
+  const { data: likesData } = useQuery({
+    queryKey: ["likes"],
+    queryFn: () => api<{ likes: UserLike[] }>("/likes"),
   });
 
   const { data: tokenData } = useQuery({
@@ -29,27 +29,27 @@ export function RewardsPage() {
 
   const addMutation = useMutation({
     mutationFn: ({ tier, label }: { tier: RewardTier; label: string }) =>
-      api("/rewards", {
+      api("/likes", {
         method: "POST",
         body: JSON.stringify({ tier, label }),
       }),
     onSuccess: (_, { tier }) => {
-      queryClient.invalidateQueries({ queryKey: ["rewards"] });
+      queryClient.invalidateQueries({ queryKey: ["likes"] });
       setNewLabels((prev) => ({ ...prev, [tier]: "" }));
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api(`/rewards/${id}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rewards"] }),
+    mutationFn: (id: string) => api(`/likes/${id}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["likes"] }),
   });
 
-  const rewardsByTier = TIERS.reduce(
+  const likesByTier = TIERS.reduce(
     (acc, tier) => {
-      acc[tier] = (rewardsData?.rewards ?? []).filter((r) => r.tier === tier);
+      acc[tier] = (likesData?.likes ?? []).filter((r) => r.tier === tier);
       return acc;
     },
-    {} as Record<RewardTier, UserReward[]>
+    {} as Record<RewardTier, UserLike[]>
   );
 
   const balances = tokenData?.balances;
@@ -58,21 +58,21 @@ export function RewardsPage() {
   return (
     <>
       <div className="page-header">
-        <h2 style={{ margin: 0, fontSize: "0.85rem" }}>Rewards</h2>
+        <h2 style={{ margin: 0, fontSize: "0.85rem" }}>Likes</h2>
       </div>
       <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", marginTop: 0 }}>
-        Add personal rewards per tier. Spend tokens to spin the randomizer.
+        Things you enjoy at each tier. Spend tokens to spin and maybe win one.
       </p>
 
       {TIERS.map((tier) => {
-        const rewards = rewardsByTier[tier];
+        const likes = likesByTier[tier];
         const tokenCount = balances?.[tier] ?? 0;
         const canClaim = schedule?.[tier]?.canClaim ?? true;
         const canSpin = tokenCount > 0 && canClaim;
 
         return (
-          <section key={tier} className="reward-section neon-card">
-            <div className="reward-section-header">
+          <section key={tier} className="like-section neon-card">
+            <div className="like-section-header">
               <h3
                 style={{
                   margin: 0,
@@ -99,40 +99,40 @@ export function RewardsPage() {
                 Spin ({tokenCount})
               </button>
             </div>
-            <p className="reward-freq">{TIER_FREQUENCY_LABEL[tier]}</p>
+            <p className="like-freq">{TIER_FREQUENCY_LABEL[tier]}</p>
             {schedule && (
-              <p className="reward-freq" style={{ marginTop: "-0.25rem" }}>
+              <p className="like-freq" style={{ marginTop: "-0.25rem" }}>
                 Claims: {schedule[tier].claimCount} / {schedule[tier].limit}
               </p>
             )}
 
-            <ul className="reward-list">
-              {rewards.map((r) => (
-                <li key={r.id} className="reward-item">
-                  <span>{r.label}</span>
+            <ul className="like-list">
+              {likes.map((item) => (
+                <li key={item.id} className="like-item">
+                  <span>{item.label}</span>
                   <button
                     type="button"
                     className="icon-btn"
-                    aria-label="Delete reward"
+                    aria-label="Remove like"
                     onClick={() => {
-                      if (confirm("Remove this reward?")) deleteMutation.mutate(r.id);
+                      if (confirm("Remove this like?")) deleteMutation.mutate(item.id);
                     }}
                   >
                     ×
                   </button>
                 </li>
               ))}
-              {rewards.length === 0 && (
+              {likes.length === 0 && (
                 <li style={{ color: "var(--text-dim)", fontSize: "0.85rem", listStyle: "none" }}>
-                  No rewards yet
+                  No likes yet
                 </li>
               )}
             </ul>
 
-            <div className="add-reward-row">
+            <div className="add-like-row">
               <input
                 className="neon-input"
-                placeholder="Add a reward…"
+                placeholder="Add something you like…"
                 value={newLabels[tier]}
                 onChange={(e) =>
                   setNewLabels((prev) => ({ ...prev, [tier]: e.target.value }))

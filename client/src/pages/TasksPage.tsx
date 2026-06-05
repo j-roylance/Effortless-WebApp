@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { Habit, TokenBalances } from "../api/types";
+import type { Task, TokenBalances } from "../api/types";
 import { TIERS, type RewardTier } from "../domain/tiers";
 import { TierBadge } from "../components/TierBadge";
 import { Toast } from "../components/Toast";
 
-export function HabitsPage() {
+export function TasksPage() {
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
@@ -22,9 +22,9 @@ export function HabitsPage() {
     }
   }, [location.state, location.pathname, navigate]);
 
-  const { data: habitsData, isLoading } = useQuery({
-    queryKey: ["habits"],
-    queryFn: () => api<{ habits: Habit[] }>("/habits"),
+  const { data: tasksData, isLoading } = useQuery({
+    queryKey: ["tasks"],
+    queryFn: () => api<{ tasks: Task[] }>("/tasks"),
   });
 
   const { data: tokenData } = useQuery({
@@ -34,16 +34,16 @@ export function HabitsPage() {
 
   const achieveMutation = useMutation({
     mutationFn: (id: string) =>
-      api<{ token: { tier: RewardTier } }>(`/habits/${id}/achieve`, { method: "POST" }),
+      api<{ token: { tier: RewardTier } }>(`/tasks/${id}/achieve`, { method: "POST" }),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["habits"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
       setToast(`+1 ${data.token.tier} Token`);
     },
     onError: (err: Error) => setToast(err.message),
   });
 
-  const habits = habitsData?.habits ?? [];
+  const tasks = tasksData?.tasks ?? [];
   const balances = tokenData?.balances;
   const totalTokens = balances
     ? TIERS.reduce((sum, t) => sum + (balances[t] ?? 0), 0)
@@ -52,7 +52,7 @@ export function HabitsPage() {
   return (
     <>
       <div className="page-header">
-        <h2 style={{ margin: 0, fontSize: "0.85rem" }}>Goals & Habits</h2>
+        <h2 style={{ margin: 0, fontSize: "0.85rem" }}>Tasks</h2>
         <button
           type="button"
           className="token-chip"
@@ -74,29 +74,29 @@ export function HabitsPage() {
           )}
           {totalTokens === 0 && (
             <p style={{ margin: 0, color: "var(--text-dim)", fontSize: "0.9rem" }}>
-              Achieve habits to earn tokens.
+              Complete tasks to earn tokens.
             </p>
           )}
         </div>
       )}
 
-      {isLoading && <p className="empty-state">Loading habits…</p>}
+      {isLoading && <p className="empty-state">Loading tasks…</p>}
 
-      {!isLoading && habits.length === 0 && (
+      {!isLoading && tasks.length === 0 && (
         <div className="empty-state neon-card">
-          <p>No habits yet.</p>
-          <p>Tap + to add your first goal.</p>
+          <p>No tasks yet.</p>
+          <p>Tap + to add your first to-do.</p>
         </div>
       )}
 
-      <div className="habit-list">
-        {habits.map((habit) => (
-          <article key={habit.id} className="habit-card neon-card">
-            <div className="habit-card-header">
+      <div className="task-list">
+        {tasks.map((task) => (
+          <article key={task.id} className="task-card neon-card">
+            <div className="task-card-header">
               <div>
-                <h3 style={{ margin: "0 0 0.35rem", fontSize: "1.1rem" }}>{habit.name}</h3>
-                <TierBadge tier={habit.tier} />
-                {!habit.persistAfterDone && (
+                <h3 style={{ margin: "0 0 0.35rem", fontSize: "1.1rem" }}>{task.name}</h3>
+                <TierBadge tier={task.tier} />
+                {!task.persistAfterDone && (
                   <span
                     style={{
                       marginLeft: "0.5rem",
@@ -108,16 +108,16 @@ export function HabitsPage() {
                   </span>
                 )}
               </div>
-              <Link to={`/habits/${habit.id}/edit`} className="icon-btn" aria-label="Edit">
+              <Link to={`/tasks/${task.id}/edit`} className="icon-btn" aria-label="Edit task">
                 ✎
               </Link>
             </div>
-            <div className="habit-card-actions">
+            <div className="task-card-actions">
               <button
                 type="button"
                 className="neon-btn neon-btn-primary"
                 style={{ flex: 1 }}
-                onClick={() => achieveMutation.mutate(habit.id)}
+                onClick={() => achieveMutation.mutate(task.id)}
                 disabled={achieveMutation.isPending}
               >
                 Achieve

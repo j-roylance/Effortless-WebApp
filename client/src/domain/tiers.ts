@@ -61,6 +61,6 @@ export type SpinOutcome = "Win" | "LevelUp" | "NoReward" | "LevelDown";
 export const OUTCOME_LABELS: Record<SpinOutcome, string> = {
   Win: "You won!",
   LevelUp: "Level up!",
-  NoReward: "No reward",
+  NoReward: "Nothing",
   LevelDown: "Step down",
 };

@@ -2,7 +2,7 @@
 
 ## Product in one sentence
 
-Habits earn tier tokens; users define rewards per tier and spin to win them, with server-side randomness and schedule limits.
+Tasks earn tier tokens; users define likes per tier and spin to win them, with server-side randomness and schedule limits.
 
 ## Where to change things
 

@@ -1,5 +1,5 @@
 /**
- * Spin randomizer: spends a token, rolls outcome, optionally awards a UserReward.
+ * Spin randomizer: spends a token, rolls outcome, optionally picks a UserLike (UserReward row).
  * Schedule caps use SpinLog + user timezone (X-Timezone header).
  */
 import { RewardTier, SpinOutcome } from "@prisma/client";
@@ -58,8 +58,8 @@ async function countClaimsInBucket(
 export interface SpinResult {
   outcome: SpinOutcome;
   effectiveTier: RewardTier;
-  reward?: { id: string; label: string };
-  spinnerRewards: { id: string; label: string }[];
+  like?: { id: string; label: string };
+  spinnerLikes: { id: string; label: string }[];
   winningIndex: number;
   tokenBalances: Record<RewardTier, number>;
   newTokenFromLevelUp: boolean;
@@ -169,8 +169,8 @@ export async function executeSpin(
     return {
       outcome,
       effectiveTier,
-      reward,
-      spinnerRewards,
+      like: reward,
+      spinnerLikes: spinnerRewards,
       winningIndex,
       tokenBalances,
       newTokenFromLevelUp,

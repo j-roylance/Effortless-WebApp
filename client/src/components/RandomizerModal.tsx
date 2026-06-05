@@ -36,8 +36,8 @@ export function RandomizerModal({
       setTimeout(() => {
         const needsSpinner =
           (data.outcome === "Win" || data.outcome === "LevelUp") &&
-          data.spinnerRewards.length > 0 &&
-          data.reward;
+          data.spinnerLikes.length > 0 &&
+          data.like;
         if (needsSpinner) {
           setPhase("spinning");
         } else {
@@ -47,15 +47,9 @@ export function RandomizerModal({
     },
   });
 
-  const handleSpin = () => {
-    spinMutation.mutate();
-  };
-
   const outcome = result?.outcome;
   const showSpinner =
-    phase === "spinning" &&
-    result &&
-    result.spinnerRewards.length > 0;
+    phase === "spinning" && result && result.spinnerLikes.length > 0;
 
   return (
     <div className="modal-overlay" onClick={onClose} role="presentation">
@@ -72,7 +66,7 @@ export function RandomizerModal({
         {phase === "idle" && (
           <>
             <p style={{ color: "var(--text-dim)" }}>
-              Spend 1 {tokenTier} token to run the randomizer.
+              Spend 1 {tokenTier} token to spin for a like at this tier.
             </p>
             <p style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}>
               25% win · 25% level up · 25% nothing · 25% step down
@@ -84,7 +78,7 @@ export function RandomizerModal({
               <button
                 type="button"
                 className="neon-btn neon-btn-primary"
-                onClick={handleSpin}
+                onClick={() => spinMutation.mutate()}
                 disabled={spinMutation.isPending}
               >
                 {spinMutation.isPending ? "Rolling…" : "Spin"}
@@ -109,7 +103,7 @@ export function RandomizerModal({
 
         {showSpinner && result && (
           <SpinnerWheel
-            slices={result.spinnerRewards}
+            slices={result.spinnerLikes}
             winningIndex={result.winningIndex}
             tier={result.effectiveTier}
             spinning={phase === "spinning"}
@@ -119,15 +113,15 @@ export function RandomizerModal({
 
         {phase === "done" && result && (
           <div style={{ textAlign: "center" }}>
-            {result.reward ? (
+            {result.like ? (
               <>
                 <p style={{ color: "var(--success)", fontFamily: "var(--font-display)" }}>
-                  You won:
+                  You get:
                 </p>
-                <p style={{ fontSize: "1.25rem" }}>{result.reward.label}</p>
+                <p style={{ fontSize: "1.25rem" }}>{result.like.label}</p>
               </>
             ) : (
-              <p style={{ color: "var(--text-dim)" }}>No prize this time.</p>
+              <p style={{ color: "var(--text-dim)" }}>No like this time.</p>
             )}
             <button
               type="button"

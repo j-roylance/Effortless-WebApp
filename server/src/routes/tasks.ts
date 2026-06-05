@@ -5,33 +5,33 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { isValidTier } from "../domain/tiers.js";
 
-export const habitsRouter = Router();
-habitsRouter.use(requireAuth);
+export const tasksRouter = Router();
+tasksRouter.use(requireAuth);
 
-const habitBodySchema = z.object({
+const taskBodySchema = z.object({
   name: z.string().min(1).max(200),
   tier: z.string().refine(isValidTier, { message: "Invalid tier" }),
   persistAfterDone: z.boolean().optional(),
 });
 
-habitsRouter.get("/", async (req: AuthedRequest, res) => {
-  const habits = await prisma.habit.findMany({
+tasksRouter.get("/", async (req: AuthedRequest, res) => {
+  const rows = await prisma.habit.findMany({
     where: { userId: req.user!.userId, archivedAt: null },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
   });
-  res.json({ habits });
+  res.json({ tasks: rows });
 });
 
-/** Create habit and grant +1 Bronze token (habit_create). */
-habitsRouter.post("/", async (req: AuthedRequest, res) => {
+/** New task grants +1 Bronze token (source: task_create). */
+tasksRouter.post("/", async (req: AuthedRequest, res) => {
   try {
-    const body = habitBodySchema.parse(req.body);
+    const body = taskBodySchema.parse(req.body);
     const count = await prisma.habit.count({
       where: { userId: req.user!.userId, archivedAt: null },
     });
 
     const result = await prisma.$transaction(async (tx) => {
-      const habit = await tx.habit.create({
+      const task = await tx.habit.create({
         data: {
           userId: req.user!.userId,
           name: body.name.trim(),
@@ -45,15 +45,15 @@ habitsRouter.post("/", async (req: AuthedRequest, res) => {
         data: {
           userId: req.user!.userId,
           tier: RewardTier.Bronze,
-          source: "habit_create",
+          source: "task_create",
         },
       });
 
-      return { habit, token };
+      return { task, token };
     });
 
     res.status(201).json({
-      habit: result.habit,
+      task: result.task,
       token: { id: result.token.id, tier: result.token.tier },
     });
   } catch (e) {
@@ -62,18 +62,18 @@ habitsRouter.post("/", async (req: AuthedRequest, res) => {
   }
 });
 
-habitsRouter.patch("/:id", async (req: AuthedRequest, res) => {
+tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
   try {
-    const habitId = String(req.params.id);
-    const body = habitBodySchema.partial().parse(req.body);
+    const taskId = String(req.params.id);
+    const body = taskBodySchema.partial().parse(req.body);
     const existing = await prisma.habit.findFirst({
-      where: { id: habitId, userId: req.user!.userId },
+      where: { id: taskId, userId: req.user!.userId },
     });
     if (!existing) {
       res.status(404).json({ error: "Not found" });
       return;
     }
-    const habit = await prisma.habit.update({
+    const task = await prisma.habit.update({
       where: { id: existing.id },
       data: {
         ...(body.name !== undefined && { name: body.name.trim() }),
@@ -83,17 +83,17 @@ habitsRouter.patch("/:id", async (req: AuthedRequest, res) => {
         }),
       },
     });
-    res.json({ habit });
+    res.json({ task });
   } catch (e) {
     const err = e as Error;
     res.status(400).json({ error: err.message });
   }
 });
 
-habitsRouter.delete("/:id", async (req: AuthedRequest, res) => {
-  const habitId = String(req.params.id);
+tasksRouter.delete("/:id", async (req: AuthedRequest, res) => {
+  const taskId = String(req.params.id);
   const existing = await prisma.habit.findFirst({
-    where: { id: habitId, userId: req.user!.userId },
+    where: { id: taskId, userId: req.user!.userId },
   });
   if (!existing) {
     res.status(404).json({ error: "Not found" });
@@ -103,13 +103,13 @@ habitsRouter.delete("/:id", async (req: AuthedRequest, res) => {
   res.json({ ok: true });
 });
 
-/** Mark habit achieved; grant token at habit tier; archive if one-time. */
-habitsRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
-  const habitId = String(req.params.id);
-  const habit = await prisma.habit.findFirst({
-    where: { id: habitId, userId: req.user!.userId, archivedAt: null },
+/** Complete task; grant token at task tier; archive if one-time. */
+tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
+  const taskId = String(req.params.id);
+  const task = await prisma.habit.findFirst({
+    where: { id: taskId, userId: req.user!.userId, archivedAt: null },
   });
-  if (!habit) {
+  if (!task) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -118,24 +118,24 @@ habitsRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
     const token = await tx.rewardToken.create({
       data: {
         userId: req.user!.userId,
-        tier: habit.tier,
-        source: "habit_achieve",
+        tier: task.tier,
+        source: "task_achieve",
       },
     });
 
     const updated = await tx.habit.update({
-      where: { id: habit.id },
+      where: { id: task.id },
       data: {
         achievedAt: new Date(),
-        ...(!habit.persistAfterDone && { archivedAt: new Date() }),
+        ...(!task.persistAfterDone && { archivedAt: new Date() }),
       },
     });
 
-    return { token, habit: updated };
+    return { token, task: updated };
   });
 
   res.json({
-    habit: result.habit,
+    task: result.task,
     token: { id: result.token.id, tier: result.token.tier },
   });
 });

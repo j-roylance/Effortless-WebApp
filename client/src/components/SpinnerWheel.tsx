@@ -46,7 +46,7 @@ export function SpinnerWheel({
   if (slices.length === 0) {
     return (
       <div className="spinner-container">
-        <p className="empty-state">No rewards in pool</p>
+        <p className="empty-state">No likes in pool</p>
       </div>
     );
   }

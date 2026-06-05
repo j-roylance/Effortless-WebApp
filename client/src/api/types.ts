@@ -5,7 +5,8 @@ export interface User {
   email: string;
 }
 
-export interface Habit {
+/** Task (stored as Habit in the database). */
+export interface Task {
   id: string;
   name: string;
   tier: RewardTier;
@@ -16,7 +17,8 @@ export interface Habit {
   createdAt: string;
 }
 
-export interface UserReward {
+/** Something you like — a possible prize at a tier (stored as UserReward). */
+export interface UserLike {
   id: string;
   tier: RewardTier;
   label: string;
@@ -34,8 +36,8 @@ export interface TokenBalances {
 export interface SpinResult {
   outcome: SpinOutcome;
   effectiveTier: RewardTier;
-  reward?: { id: string; label: string };
-  spinnerRewards: { id: string; label: string }[];
+  like?: { id: string; label: string };
+  spinnerLikes: { id: string; label: string }[];
   winningIndex: number;
   tokenBalances: Record<RewardTier, number>;
   newTokenFromLevelUp: boolean;

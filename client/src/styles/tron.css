@@ -265,26 +265,26 @@ h3,
   }
 }
 
-.habit-list {
+.task-list {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-.habit-card {
+.task-card {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-.habit-card-header {
+.task-card-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 0.5rem;
 }
 
-.habit-card-actions {
+.task-card-actions {
   display: flex;
   gap: 0.5rem;
   align-items: center;
@@ -338,29 +338,29 @@ h3,
   font-size: 0.9rem;
 }
 
-.reward-section {
+.like-section {
   margin-bottom: 1.25rem;
 }
 
-.reward-section-header {
+.like-section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.5rem;
 }
 
-.reward-freq {
+.like-freq {
   font-size: 0.75rem;
   color: var(--text-dim);
 }
 
-.reward-list {
+.like-list {
   list-style: none;
   padding: 0;
   margin: 0 0 0.5rem;
 }
 
-.reward-item {
+.like-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -369,12 +369,12 @@ h3,
   gap: 0.5rem;
 }
 
-.add-reward-row {
+.add-like-row {
   display: flex;
   gap: 0.5rem;
 }
 
-.add-reward-row input {
+.add-like-row input {
   flex: 1;
 }
 

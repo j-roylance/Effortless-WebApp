@@ -1,13 +1,13 @@
 # Effortless
 
-Mobile-first habit tracker with tiered reward tokens and a Tron-themed prize wheel. Users earn tokens from habits, define personal rewards per tier, and spend tokens on a server-side randomizer.
+Mobile-first life pattern app: split to-dos and things you like into achievement and reward. Complete tasks to earn tiered tokens, list personal likes per tier, and spend tokens on a Tron-themed server-side randomizer.
 
 ## How it works
 
 1. **Sign up / log in** — session stored in an httpOnly cookie.
-2. **Habits tab** — create habits; each new habit grants **+1 Bronze token**; **Achieve** grants a token at that habit’s tier.
-3. **Rewards tab** — list personal prizes per tier (Bronze → Galactic); **Spin** spends one token of that tier.
-4. **Randomizer** — 25% win, 25% level up, 25% nothing, 25% step down; wins pick from your reward list (spinner animation follows the server result).
+2. **Tasks tab** — add to-dos; each new task grants **+1 Bronze token**; **Achieve** grants a token at that task’s tier.
+3. **Likes tab** — list things you enjoy per tier (Bronze → Galactic); **Spin** spends one token of that tier.
+4. **Randomizer** — 25% win, 25% level up, 25% nothing, 25% step down; wins pick from your likes list (spinner animation follows the server result).
 
 Tier schedule limits (e.g. 20 Bronze wins per day) are enforced on the server. See [`server/src/domain/tiers.ts`](server/src/domain/tiers.ts).
 

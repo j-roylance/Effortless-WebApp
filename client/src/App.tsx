@@ -1,7 +1,8 @@
 /**
- * Route map:
+ * Routes:
  * - /login, /signup — guests only
- * - /, /habits/*, /rewards — authenticated (see AppShell tabs)
+ * - /, /tasks/* — to-dos (achieve → tokens)
+ * - /likes — things you enjoy (spin tokens → maybe win one)
  */
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
@@ -10,9 +11,9 @@ import { GuestRoute } from "./components/GuestRoute";
 import { AppShell } from "./components/AppShell";
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
-import { HabitsPage } from "./pages/HabitsPage";
-import { HabitFormPage } from "./pages/HabitFormPage";
-import { RewardsPage } from "./pages/RewardsPage";
+import { TasksPage } from "./pages/TasksPage";
+import { TaskFormPage } from "./pages/TaskFormPage";
+import { LikesPage } from "./pages/LikesPage";
 
 export default function App() {
   return (
@@ -26,10 +27,10 @@ export default function App() {
 
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
-              <Route index element={<HabitsPage />} />
-              <Route path="/habits/new" element={<HabitFormPage />} />
-              <Route path="/habits/:id/edit" element={<HabitFormPage />} />
-              <Route path="/rewards" element={<RewardsPage />} />
+              <Route index element={<TasksPage />} />
+              <Route path="/tasks/new" element={<TaskFormPage />} />
+              <Route path="/tasks/:id/edit" element={<TaskFormPage />} />
+              <Route path="/likes" element={<LikesPage />} />
             </Route>
           </Route>
 

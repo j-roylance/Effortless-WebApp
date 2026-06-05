@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
+import { safeTimeZone } from "../domain/daily.js";
 import { isValidTier } from "../domain/tiers.js";
 import { executeSpin } from "../services/spin.js";
 
@@ -14,7 +15,7 @@ const spinSchema = z.object({
 spinRouter.post("/", async (req: AuthedRequest, res) => {
   try {
     const body = spinSchema.parse(req.body);
-    const timeZone = (req.headers["x-timezone"] as string) || "UTC";
+    const timeZone = safeTimeZone(req.headers["x-timezone"] as string);
     const result = await executeSpin(req.user!.userId, body.tokenTier, timeZone);
     res.json(result);
   } catch (e) {

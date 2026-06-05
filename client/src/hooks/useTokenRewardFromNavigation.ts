@@ -1,23 +1,36 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { RewardTier } from "../domain/tiers";
 
+type NavigationRewardState = {
+  tokenReward?: RewardTier;
+  toast?: string;
+};
+
 /**
- * After navigating with `state: { tokenReward }` (e.g. from TaskFormPage),
- * enqueue the tier and clear location state so refresh does not replay it.
+ * Consume `location.state` after form navigation: token modal queue + optional toast.
+ * Ref guard prevents StrictMode from enqueueing the same reward twice in dev.
  */
 export function useTokenRewardFromNavigation(
   enqueue: (tiers: RewardTier[]) => void,
-  clearPath: string
+  clearPath: string,
+  onToast?: (message: string) => void
 ) {
   const location = useLocation();
   const navigate = useNavigate();
+  const consumedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const state = location.state as { tokenReward?: RewardTier } | null;
-    if (!state?.tokenReward) return;
+    const state = location.state as NavigationRewardState | null;
+    if (!state?.tokenReward && !state?.toast) return;
 
-    enqueue([state.tokenReward]);
+    const key = `${location.key}:${JSON.stringify(state)}`;
+    if (consumedKeyRef.current === key) return;
+    consumedKeyRef.current = key;
+
+    if (state.tokenReward) enqueue([state.tokenReward]);
+    if (state.toast && onToast) onToast(state.toast);
+
     navigate(clearPath, { replace: true, state: {} });
-  }, [location.state, clearPath, navigate, enqueue]);
+  }, [location.state, location.key, clearPath, navigate, enqueue, onToast]);
 }

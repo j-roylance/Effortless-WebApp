@@ -9,11 +9,11 @@ export const goalsRouter = Router({ mergeParams: true });
 goalsRouter.use(requireAuth);
 
 const goalBodySchema = z.object({
-  name: z.string().min(1).max(200),
+  name: z.string().trim().min(1).max(200),
 });
 
 const goalPatchSchema = z.object({
-  name: z.string().min(1).max(200).optional(),
+  name: z.string().trim().min(1).max(200).optional(),
   completed: z.boolean().optional(),
 });
 

@@ -31,7 +31,11 @@ export function GoalChainNode({
 
   function commitEdit() {
     const trimmed = draft.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      setDraft(goal.name);
+      setEditing(false);
+      return;
+    }
     if (trimmed !== goal.name) onSaveName(goal.id, trimmed);
     setEditing(false);
   }

@@ -10,7 +10,7 @@ export const visionsRouter = Router();
 visionsRouter.use(requireAuth);
 
 const visionBodySchema = z.object({
-  name: z.string().min(1).max(200),
+  name: z.string().trim().min(1).max(200),
 });
 
 visionsRouter.get("/", async (req: AuthedRequest, res) => {

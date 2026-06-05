@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { AchieveResult, BonusToken, Task } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
+import { QueryErrorBanner } from "../components/QueryErrorBanner";
+import { Toast } from "../components/Toast";
 import { TokenRewardModalHost } from "../components/TokenRewardModalHost";
 import { useTokenRewardFromNavigation } from "../hooks/useTokenRewardFromNavigation";
 import { useTokenRewardQueue } from "../hooks/useTokenRewardQueue";
@@ -20,7 +22,7 @@ import {
   todayDateInput,
   type CalendarEntry,
 } from "../domain/calendar";
-import { toLocalDateInput } from "../domain/recurrence";
+import { isTaskAchievedToday, toLocalDateInput } from "../domain/recurrence";
 import { TASK_SECTION_COLOR, normalizeSection } from "../domain/tasks";
 
 function shiftDate(dateInput: string, deltaDays: number): string {
@@ -44,10 +46,11 @@ export function CalendarPage() {
     useTokenRewardQueue();
   const [dragging, setDragging] = useState<CalendarEntry | null>(null);
   const [dragMinutes, setDragMinutes] = useState<number | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
-  useTokenRewardFromNavigation(enqueueTokenReward, "/calendar");
+  useTokenRewardFromNavigation(enqueueTokenReward, "/calendar", setToast);
 
-  const { data: tasksData, isLoading } = useQuery({
+  const { data: tasksData, isLoading, isError, refetch } = useQuery({
     queryKey: ["tasks"],
     queryFn: () => api<{ tasks: Task[] }>("/tasks"),
   });
@@ -56,6 +59,11 @@ export function CalendarPage() {
   const entries = useMemo(
     () => entriesForDay(tasks, selectedDate),
     [tasks, selectedDate]
+  );
+
+  const doTaskIds = useMemo(
+    () => new Set(entries.filter((e) => e.type === "do").map((e) => e.taskId)),
+    [entries]
   );
 
   const isToday = selectedDate === todayDateInput();
@@ -89,6 +97,7 @@ export function CalendarPage() {
       });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+    onError: (err: Error) => setToast(err.message),
   });
 
   const achieveMutation = useMutation({
@@ -102,6 +111,7 @@ export function CalendarPage() {
         ...(data.bonusTokens?.map((b) => b.tier) ?? []),
       ]);
     },
+    onError: (err: Error) => setToast(err.message),
   });
 
   const planningMutation = useMutation({
@@ -116,11 +126,13 @@ export function CalendarPage() {
       setPlanningTick((t) => t + 1);
       if (data.token?.tier) enqueueTokenReward([data.token.tier]);
     },
+    onError: (err: Error) => setToast(err.message),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api(`/tasks/${id}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+    onError: (err: Error) => setToast(err.message),
   });
 
   function handlePlanningDone() {
@@ -155,6 +167,12 @@ export function CalendarPage() {
     };
 
     const onUp = () => {
+      if (latestMinutes === entry.startMinutes) {
+        setDragging(null);
+        setDragMinutes(null);
+        clearDragListeners();
+        return;
+      }
       rescheduleMutation.mutate({
         task: entry.task,
         entry,
@@ -229,6 +247,8 @@ export function CalendarPage() {
 
       {isLoading && <p className="empty-state">Loading calendar…</p>}
 
+      {isError && <QueryErrorBanner onRetry={() => refetch()} />}
+
       <div className="calendar-scroll">
         <div className="calendar-grid" ref={gridRef}>
           {Array.from({ length: 24 }, (_, hour) => (
@@ -240,6 +260,9 @@ export function CalendarPage() {
 
           <div className="calendar-events-layer">
             {entries.map((entry) => {
+              const showAchieve =
+                entry.type === "do" || !doTaskIds.has(entry.taskId);
+              const achievedToday = isTaskAchievedToday(entry.task.achievedAt);
               const isDraggingThis = dragging?.key === entry.key;
               const topMinutes = isDraggingThis && dragMinutes !== null
                 ? dragMinutes
@@ -274,14 +297,16 @@ export function CalendarPage() {
                     </span>
                   </div>
                   <div className="calendar-event-actions">
-                    <button
-                      type="button"
-                      className="calendar-action-btn"
-                      onClick={() => achieveMutation.mutate(entry.taskId)}
-                      disabled={achieveMutation.isPending}
-                    >
-                      Achieve
-                    </button>
+                    {showAchieve && (
+                      <button
+                        type="button"
+                        className="calendar-action-btn"
+                        onClick={() => achieveMutation.mutate(entry.taskId)}
+                        disabled={achieveMutation.isPending || achievedToday}
+                      >
+                        {achievedToday ? "Done today" : "Achieve"}
+                      </button>
+                    )}
                     <Link
                       to={`/tasks/${entry.taskId}/edit`}
                       state={{ returnTo: "/calendar" }}
@@ -308,7 +333,7 @@ export function CalendarPage() {
         </div>
       </div>
 
-      {!isLoading && entries.length === 0 && (
+      {!isLoading && !isError && entries.length === 0 && (
         <p className="empty-state" style={{ marginTop: "1rem" }}>
           No do or due dates on this day.
         </p>
@@ -339,6 +364,8 @@ export function CalendarPage() {
           </div>
         </div>
       )}
+
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
       <TokenRewardModalHost tier={tokenReward} onClose={dismissTokenReward} />
     </>

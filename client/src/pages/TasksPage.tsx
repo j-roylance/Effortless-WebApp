@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { AchieveResult, Task, TokenBalances } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
+import { QueryErrorBanner } from "../components/QueryErrorBanner";
 import { TaskCard } from "../components/TaskCard";
 import { Toast } from "../components/Toast";
 import { TokenRewardModalHost } from "../components/TokenRewardModalHost";
@@ -63,23 +64,14 @@ function TaskSectionBlock({
 export function TasksPage() {
   const queryClient = useQueryClient();
   const location = useLocation();
-  const navigate = useNavigate();
   const [showTokens, setShowTokens] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const { current: tokenReward, enqueue: enqueueTokenReward, dismissCurrent: dismissTokenReward } =
     useTokenRewardQueue();
 
-  useTokenRewardFromNavigation(enqueueTokenReward, location.pathname);
+  useTokenRewardFromNavigation(enqueueTokenReward, location.pathname, setToast);
 
-  useEffect(() => {
-    const state = location.state as { toast?: string } | null;
-    if (state?.toast) {
-      setToast(state.toast);
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-  }, [location.state, location.pathname, navigate]);
-
-  const { data: tasksData, isLoading } = useQuery({
+  const { data: tasksData, isLoading, isError, refetch } = useQuery({
     queryKey: ["tasks"],
     queryFn: () => api<{ tasks: Task[] }>("/tasks"),
   });
@@ -150,14 +142,18 @@ export function TasksPage() {
 
       {isLoading && <p className="empty-state">Loading tasks…</p>}
 
-      {!isLoading && tasks.length === 0 && (
+      {isError && (
+        <QueryErrorBanner onRetry={() => refetch()} />
+      )}
+
+      {!isLoading && !isError && tasks.length === 0 && (
         <div className="empty-state neon-card">
           <p>No tasks yet.</p>
           <p>Tap + to add your first to-do.</p>
         </div>
       )}
 
-      {!isLoading &&
+      {!isLoading && !isError &&
         TASK_SECTIONS.map((section) => (
           <TaskSectionBlock
             key={section}
@@ -168,7 +164,7 @@ export function TasksPage() {
           />
         ))}
 
-      {!isLoading && hasPastDue && (
+      {!isLoading && !isError && hasPastDue && (
         <section className="past-due-block">
           <h2 className="past-due-title">Past Due</h2>
           {TASK_SECTIONS.map((section) => (

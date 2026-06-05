@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { parseOptionalTier, tierToOptional } from "../domain/daily.js";
+import { safeTimeZone } from "../domain/daily.js";
 import {
   claimPlanningBonus,
   getDailySettings,
@@ -73,7 +74,7 @@ dailySettingsRouter.put("/", async (req: AuthedRequest, res) => {
 
 dailySettingsRouter.post("/claim-planning", async (req: AuthedRequest, res) => {
   try {
-    const timeZone = (req.headers["x-timezone"] as string) || "UTC";
+    const timeZone = safeTimeZone(req.headers["x-timezone"] as string);
     const token = await claimPlanningBonus(req.user!.userId, timeZone);
     res.json({ token });
   } catch (e) {

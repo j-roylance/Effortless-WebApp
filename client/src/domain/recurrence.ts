@@ -21,6 +21,15 @@ export function isTaskPastDue(dueAt: string | null | undefined, now = new Date()
   return new Date(dueAt) < now;
 }
 
+/** True when the task was already achieved on the user's local calendar day. */
+export function isTaskAchievedToday(
+  achievedAt: string | null | undefined,
+  now = new Date()
+): boolean {
+  if (!achievedAt) return false;
+  return toLocalDateInput(achievedAt) === toLocalDateInput(now.toISOString());
+}
+
 export function toLocalDateInput(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);

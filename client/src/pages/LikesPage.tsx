@@ -9,6 +9,8 @@ import {
   type RewardTier,
 } from "../domain/tiers";
 import { PageHeader } from "../components/PageHeader";
+import { QueryErrorBanner } from "../components/QueryErrorBanner";
+import { Toast } from "../components/Toast";
 import { RandomizerModal } from "../components/RandomizerModal";
 import { WheelConfigModal } from "../components/WheelConfigModal";
 
@@ -19,13 +21,22 @@ export function LikesPage() {
   const [newLabels, setNewLabels] = useState<Record<RewardTier, string>>(
     () => Object.fromEntries(TIERS.map((t) => [t, ""])) as Record<RewardTier, string>
   );
+  const [toast, setToast] = useState<string | null>(null);
 
-  const { data: likesData } = useQuery({
+  const {
+    data: likesData,
+    isError: likesError,
+    refetch: refetchLikes,
+  } = useQuery({
     queryKey: ["likes"],
     queryFn: () => api<{ likes: UserLike[] }>("/likes"),
   });
 
-  const { data: tokenData } = useQuery({
+  const {
+    data: tokenData,
+    isError: tokensError,
+    refetch: refetchTokens,
+  } = useQuery({
     queryKey: ["tokens"],
     queryFn: () => api<TokenBalances>("/tokens"),
   });
@@ -40,11 +51,13 @@ export function LikesPage() {
       queryClient.invalidateQueries({ queryKey: ["likes"] });
       setNewLabels((prev) => ({ ...prev, [tier]: "" }));
     },
+    onError: (err: Error) => setToast(err.message),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api(`/likes/${id}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["likes"] }),
+    onError: (err: Error) => setToast(err.message),
   });
 
   const likesByTier = TIERS.reduce(
@@ -64,6 +77,15 @@ export function LikesPage() {
       <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", marginTop: 0 }}>
         Things you enjoy at each tier. Spend tokens to spin and maybe win one.
       </p>
+
+      {(likesError || tokensError) && (
+        <QueryErrorBanner
+          onRetry={() => {
+            if (likesError) void refetchLikes();
+            if (tokensError) void refetchTokens();
+          }}
+        />
+      )}
 
       {TIERS.map((tier) => {
         const likes = likesByTier[tier];
@@ -184,6 +206,8 @@ export function LikesPage() {
           onClose={() => setWheelEditTier(null)}
         />
       )}
+
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </>
   );
 }

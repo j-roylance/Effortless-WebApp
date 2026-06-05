@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api } from "../api/client";
+import { api, ApiError } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 export function LoginPage() {
@@ -22,8 +22,8 @@ export function LoginPage() {
       });
       await refresh();
       navigate("/");
-    } catch {
-      setError("Invalid credentials");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Sign in failed");
     } finally {
       setLoading(false);
     }

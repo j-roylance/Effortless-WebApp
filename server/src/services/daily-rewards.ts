@@ -70,9 +70,15 @@ async function claimBonus(
   });
   if (existing) return null;
 
-  await tx.dailyBonusClaim.create({
-    data: { userId, dayKey, bonusType, tier },
-  });
+  try {
+    await tx.dailyBonusClaim.create({
+      data: { userId, dayKey, bonusType, tier },
+    });
+  } catch (e) {
+    const err = e as { code?: string };
+    if (err.code === "P2002") return null;
+    throw e;
+  }
 
   await tx.rewardToken.create({
     data: {
@@ -99,17 +105,29 @@ export async function claimPlanningBonus(
   );
 }
 
+export type ScheduleSnapshot = { taskId: string; scheduledAt: Date | null };
+
+function applyScheduleSnapshots(tasks: Habit[], snapshots: ScheduleSnapshot[]): Habit[] {
+  if (snapshots.length === 0) return tasks;
+  const map = new Map(snapshots.map((s) => [s.taskId, s.scheduledAt]));
+  return tasks.map((t) =>
+    map.has(t.id) ? { ...t, scheduledAt: map.get(t.id)! } : t
+  );
+}
+
 export async function evaluateAchievementBonuses(
   userId: string,
   timeZone: string,
-  dayKey?: string
+  dayKey?: string,
+  scheduleSnapshots: ScheduleSnapshot[] = []
 ): Promise<BonusToken[]> {
   const key = dayKey ?? dayKeyForTimezone(timeZone);
   const settings = await getDailySettings(userId);
 
-  const tasks = await prisma.habit.findMany({
-    where: { userId, archivedAt: null },
-  });
+  const tasks = applyScheduleSnapshots(
+    await prisma.habit.findMany({ where: { userId, archivedAt: null } }),
+    scheduleSnapshots
+  );
 
   const bonuses: BonusToken[] = [];
 

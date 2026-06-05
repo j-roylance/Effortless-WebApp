@@ -2,7 +2,7 @@
  * Spin randomizer: spends a token, rolls outcome, optionally picks a UserLike (UserReward row).
  * Schedule caps use SpinLog + user timezone (X-Timezone header).
  */
-import { RewardTier, SpinOutcome } from "@prisma/client";
+import { RewardTier, SpinOutcome, type Prisma } from "@prisma/client";
 import {
   TIERS,
   bucketStartForTier,
@@ -11,6 +11,7 @@ import {
   tierDown,
   tierUp,
 } from "../domain/tiers.js";
+import { safeTimeZone } from "../domain/daily.js";
 import { prisma } from "../lib/prisma.js";
 import { getTokenBalances } from "./tokens.js";
 import {
@@ -25,6 +26,8 @@ const OUTCOMES: SpinOutcome[] = [
   SpinOutcome.NoReward,
   SpinOutcome.LevelDown,
 ];
+
+type Tx = Prisma.TransactionClient;
 
 function rollOutcome(): SpinOutcome {
   return OUTCOMES[Math.floor(Math.random() * OUTCOMES.length)]!;
@@ -46,11 +49,12 @@ function effectiveTierForOutcome(tokenTier: RewardTier, outcome: SpinOutcome): R
 async function countClaimsInBucket(
   userId: string,
   tier: RewardTier,
-  timeZone: string
+  timeZone: string,
+  tx: Tx | typeof prisma = prisma
 ): Promise<number> {
   const now = new Date();
   const bucketStart = bucketStartForTier(tier, now, timeZone);
-  return prisma.spinLog.count({
+  return tx.spinLog.count({
     where: {
       userId,
       effectiveTier: tier,
@@ -58,6 +62,26 @@ async function countClaimsInBucket(
       createdAt: { gte: bucketStart },
     },
   });
+}
+
+/** Atomically mark the oldest unspent token as spent; returns null if none or lost race. */
+async function spendOldestToken(
+  tx: Tx,
+  userId: string,
+  tokenTier: RewardTier
+): Promise<{ id: string } | null> {
+  const oldest = await tx.rewardToken.findFirst({
+    where: { userId, tier: tokenTier, spentAt: null },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (!oldest) return null;
+
+  const spent = await tx.rewardToken.updateMany({
+    where: { id: oldest.id, spentAt: null },
+    data: { spentAt: new Date() },
+  });
+  return spent.count === 1 ? oldest : null;
 }
 
 export interface SpinWheelSlice {
@@ -80,33 +104,26 @@ export interface SpinResult {
 export async function executeSpin(
   userId: string,
   tokenTier: RewardTier,
-  timeZone: string
+  timeZoneInput: string
 ): Promise<SpinResult> {
-  const claimCount = await countClaimsInBucket(userId, tokenTier, timeZone);
-  if (!canClaimTier(tokenTier, claimCount)) {
-    const err = Object.assign(
-      new Error(
-        `Schedule cap reached for ${tokenTier} (${tierClaimLimit(tokenTier)} per period)`
-      ),
-      { status: 409, code: "schedule_cap" }
-    );
-    throw err;
-  }
+  const timeZone = safeTimeZone(timeZoneInput);
 
-  return prisma.$transaction(async (tx) => {
-    const token = await tx.rewardToken.findFirst({
-      where: { userId, tier: tokenTier, spentAt: null },
-      orderBy: { createdAt: "asc" },
-    });
+  const spinCore = await prisma.$transaction(async (tx) => {
+    const claimCount = await countClaimsInBucket(userId, tokenTier, timeZone, tx);
+    if (!canClaimTier(tokenTier, claimCount)) {
+      const err = Object.assign(
+        new Error(
+          `Schedule cap reached for ${tokenTier} (${tierClaimLimit(tokenTier)} per period)`
+        ),
+        { status: 409, code: "schedule_cap" }
+      );
+      throw err;
+    }
 
+    const token = await spendOldestToken(tx, userId, tokenTier);
     if (!token) {
       throw Object.assign(new Error("No unspent token for this tier"), { status: 400 });
     }
-
-    await tx.rewardToken.update({
-      where: { id: token.id },
-      data: { spentAt: new Date() },
-    });
 
     let outcome = rollOutcome();
     let effectiveTier = effectiveTierForOutcome(tokenTier, outcome);
@@ -114,15 +131,7 @@ export async function executeSpin(
     const shouldPickPrize = outcome === SpinOutcome.Win || outcome === SpinOutcome.LevelUp;
 
     if (shouldPickPrize) {
-      const effectiveClaims = await tx.spinLog.count({
-        where: {
-          userId,
-          effectiveTier,
-          outcome: { in: [SpinOutcome.Win, SpinOutcome.LevelUp] },
-          createdAt: { gte: bucketStartForTier(effectiveTier, new Date(), timeZone) },
-        },
-      });
-
+      const effectiveClaims = await countClaimsInBucket(userId, effectiveTier, timeZone, tx);
       if (!canClaimTier(effectiveTier, effectiveClaims)) {
         outcome = SpinOutcome.NoReward;
         effectiveTier = tokenTier;
@@ -193,21 +202,26 @@ export async function executeSpin(
       },
     });
 
-    const tokenBalances = await getTokenBalances(userId);
-
     return {
       outcome,
       effectiveTier,
       like: reward,
       spinnerLikes: spinnerRewards,
       winningIndex,
-      tokenBalances,
       newTokenFromLevelUp,
     };
   });
+
+  const tokenBalances = await getTokenBalances(userId);
+
+  return {
+    ...spinCore,
+    tokenBalances,
+  };
 }
 
-export async function getScheduleStatus(userId: string, timeZone: string) {
+export async function getScheduleStatus(userId: string, timeZoneInput: string) {
+  const timeZone = safeTimeZone(timeZoneInput);
   const status: Record<
     RewardTier,
     { claimCount: number; limit: number; canClaim: boolean }

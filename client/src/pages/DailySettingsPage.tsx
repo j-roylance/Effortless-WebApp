@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
+import { QueryErrorBanner } from "../components/QueryErrorBanner";
+import { Toast } from "../components/Toast";
 import {
   OPTIONAL_TIER_OPTIONS,
   type DailySettings,
@@ -39,8 +41,9 @@ export function DailySettingsPage() {
     allDoDatesRewardTier: "None",
   });
   const [saved, setSaved] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["daily-settings"],
     queryFn: () => api<DailySettings>("/daily-settings"),
   });
@@ -61,6 +64,7 @@ export function DailySettingsPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     },
+    onError: (err: Error) => setToast(err.message),
   });
 
   function updateField(key: keyof DailySettings, value: OptionalRewardTier) {
@@ -77,6 +81,10 @@ export function DailySettingsPage() {
 
       {isLoading && <p className="empty-state">Loading settings…</p>}
 
+      {isError && <QueryErrorBanner onRetry={() => refetch()} />}
+
+      {!isLoading && !isError && (
+      <>
       <div className="daily-settings-list">
         {FIELDS.map((field) => (
           <section key={field.key} className="daily-settings-card neon-card">
@@ -114,6 +122,10 @@ export function DailySettingsPage() {
       >
         {saveMutation.isPending ? "Saving…" : saved ? "Saved!" : "Save settings"}
       </button>
+      </>
+      )}
+
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </>
   );
 }

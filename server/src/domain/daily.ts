@@ -10,9 +10,20 @@ export const DAILY_BONUS_TYPES: DailyBonusType[] = [
 
 export type OptionalRewardTier = RewardTier | "None";
 
+/** Fall back to UTC when the client sends an invalid IANA zone. */
+export function safeTimeZone(timeZone: string | undefined): string {
+  const tz = timeZone?.trim() || "UTC";
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return tz;
+  } catch {
+    return "UTC";
+  }
+}
+
 export function dayKeyForTimezone(timeZone: string, date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone,
+    timeZone: safeTimeZone(timeZone),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

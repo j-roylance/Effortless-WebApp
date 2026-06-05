@@ -11,6 +11,7 @@ import {
   parseRecurrenceConfig,
   type RecurrenceConfig,
 } from "../domain/recurrence.js";
+import { dayKeyForTimezone, isSameDayInTimezone, safeTimeZone } from "../domain/daily.js";
 import { evaluateAchievementBonuses } from "../services/daily-rewards.js";
 
 export const tasksRouter = Router();
@@ -273,6 +274,15 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
   }
 
   const now = new Date();
+  const timeZone = safeTimeZone(req.headers["x-timezone"] as string);
+  const todayKey = dayKeyForTimezone(timeZone, now);
+
+  if (isSameDayInTimezone(task.achievedAt, todayKey, timeZone)) {
+    res.status(409).json({ error: "Already achieved today" });
+    return;
+  }
+
+  const preAchieveScheduledAt = task.scheduledAt;
   const config = parseRecurrenceConfig(task.recurrenceConfig);
   const advanced =
     task.recurrence !== TaskRecurrence.None
@@ -284,8 +294,6 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
           now
         )
       : { scheduledAt: task.scheduledAt, dueAt: task.dueAt };
-
-  const timeZone = (req.headers["x-timezone"] as string) || "UTC";
 
   const result = await prisma.$transaction(async (tx) => {
     const token = await tx.rewardToken.create({
@@ -311,7 +319,9 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
 
   const bonusTokens = await evaluateAchievementBonuses(
     req.user!.userId,
-    timeZone
+    timeZone,
+    todayKey,
+    [{ taskId: task.id, scheduledAt: preAchieveScheduledAt }]
   );
 
   res.json({

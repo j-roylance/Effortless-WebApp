@@ -3,6 +3,7 @@ import type { Task } from "../api/types";
 import {
   formatDateTime,
   formatDuration,
+  isTaskAchievedToday,
   recurrenceSummary,
 } from "../domain/recurrence";
 import { TierBadge } from "./TierBadge";
@@ -19,6 +20,7 @@ export function TaskCard({
   pastDue?: boolean;
 }) {
   const repeatLabel = recurrenceSummary(task.recurrence, task.recurrenceConfig);
+  const achievedToday = isTaskAchievedToday(task.achievedAt);
 
   return (
     <article className={`task-card neon-card${pastDue ? " task-card--past-due" : ""}`}>
@@ -66,9 +68,9 @@ export function TaskCard({
           className="neon-btn neon-btn-primary"
           style={{ flex: 1 }}
           onClick={() => onAchieve(task.id)}
-          disabled={achieving}
+          disabled={achieving || achievedToday}
         >
-          Achieve
+          {achievedToday ? "Achieved today" : "Achieve"}
         </button>
       </div>
     </article>

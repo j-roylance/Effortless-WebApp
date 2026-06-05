@@ -38,8 +38,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const logout = useCallback(async () => {
-    await api("/auth/logout", { method: "POST" });
-    setUser(null);
+    try {
+      await api("/auth/logout", { method: "POST" });
+    } catch {
+      // Clear local session even if the network request fails.
+    } finally {
+      setUser(null);
+    }
   }, []);
 
   return (

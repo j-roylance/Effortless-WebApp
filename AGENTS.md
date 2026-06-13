@@ -23,6 +23,7 @@ Grep hits for `habit` in old token `source` values are expected.
 | New API route | `server/src/routes/`, mount in `server/src/app.ts` |
 | Tier limits / labels | `server/src/domain/tiers.ts` **and** `client/src/domain/tiers.ts` |
 | Spin logic | `server/src/services/spin.ts` |
+| Spin odds | `server/src/domain/spin-odds.ts`, `DailySettings.spinOutcomeWeights` |
 | Daily bonuses | `server/src/services/daily-rewards.ts` |
 | Vision / goal chain | `server/src/routes/visions.ts`, `goals.ts`, `services/goals.ts` |
 | AI prompt text | `client/src/domain/ai-prompts.ts` |
@@ -41,7 +42,7 @@ Grep hits for `habit` in old token `source` values are expected.
 | `/tasks/new`, `/tasks/:id/edit` | TaskFormPage | `POST/PATCH/DELETE /tasks` |
 | `/calendar` | CalendarPage | `GET /tasks`, `PATCH /tasks/:id` |
 | `/likes` | LikesPage | `GET /likes`, `POST /spin` |
-| `/daily-settings` | DailySettingsPage | `GET/PUT /daily-settings` |
+| `/daily-settings` | Settings (DailySettingsPage) | `GET/PUT /daily-settings` |
 | `/visions` | VisionsPage | `GET /visions` |
 | `/visions/:id/chain` | VisionChainPage | `GET/POST/PATCH /visions/:id/goals` |
 | `/ai` | AiPage | (client-only prompts) |

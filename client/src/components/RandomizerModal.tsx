@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { SpinResult } from "../api/types";
+import { DEFAULT_DAILY_SETTINGS, type DailySettings } from "../domain/daily";
+import { formatSpinOddsSummary } from "../domain/spin-odds";
 import {
   OUTCOME_LABELS,
   TIER_COLORS,
@@ -22,6 +24,14 @@ export function RandomizerModal({
   const queryClient = useQueryClient();
   const [phase, setPhase] = useState<Phase>("idle");
   const [result, setResult] = useState<SpinResult | null>(null);
+
+  const { data: settings } = useQuery({
+    queryKey: ["daily-settings"],
+    queryFn: () => api<DailySettings>("/daily-settings"),
+  });
+  const oddsSummary = formatSpinOddsSummary(
+    settings?.spinOutcomeWeights ?? DEFAULT_DAILY_SETTINGS.spinOutcomeWeights
+  );
 
   const spinMutation = useMutation({
     mutationFn: () =>
@@ -69,9 +79,7 @@ export function RandomizerModal({
             <p style={{ color: "var(--text-dim)" }}>
               Spend 1 {tokenTier} token to spin for a like at this tier.
             </p>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}>
-              25% win · 25% level up · 25% nothing · 25% step down
-            </p>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}>{oddsSummary}</p>
             {spinMutation.isError && (
               <p className="form-error">{(spinMutation.error as Error).message}</p>
             )}

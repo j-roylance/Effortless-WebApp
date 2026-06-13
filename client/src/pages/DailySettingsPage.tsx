@@ -5,15 +5,20 @@ import type { UserLike } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { QueryErrorBanner } from "../components/QueryErrorBanner";
 import { RewardPicker } from "../components/RewardPicker";
+import { SpinOddsEditor } from "../components/SpinOddsEditor";
 import { Toast } from "../components/Toast";
 import {
   DEFAULT_DAILY_SETTINGS,
   type DailySettings,
 } from "../domain/daily";
 import type { MilestoneReward } from "../domain/rewards";
+import {
+  validateSpinOutcomeWeights,
+  type SpinOutcomeWeights,
+} from "../domain/spin-odds";
 
-const FIELDS: {
-  key: keyof DailySettings;
+const MILESTONE_FIELDS: {
+  key: "planningReward" | "allMustsReward" | "allDoDatesReward";
   label: string;
   description: string;
 }[] = [
@@ -70,12 +75,22 @@ export function DailySettingsPage() {
     onError: (err: Error) => setToast(err.message),
   });
 
-  function updateField(key: keyof DailySettings, value: MilestoneReward) {
+  function updateMilestone(
+    key: "planningReward" | "allMustsReward" | "allDoDatesReward",
+    value: MilestoneReward
+  ) {
     setSettings((prev) => ({ ...prev, [key]: value }));
   }
 
+  function updateSpinOdds(value: SpinOutcomeWeights) {
+    setSettings((prev) => ({ ...prev, spinOutcomeWeights: value }));
+  }
+
   function validate(): string | null {
-    for (const field of FIELDS) {
+    const oddsErr = validateSpinOutcomeWeights(settings.spinOutcomeWeights);
+    if (oddsErr) return oddsErr;
+
+    for (const field of MILESTONE_FIELDS) {
       const reward = settings[field.key];
       if (reward.kind === "token" && !reward.tier) {
         return `${field.label} requires a token tier`;
@@ -101,11 +116,10 @@ export function DailySettingsPage() {
 
   return (
     <>
-      <PageHeader title="Daily Settings" />
+      <PageHeader title="Settings" />
 
       <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", marginTop: 0 }}>
-        Choose rewards for daily milestones: no reward, a spin token, a specific like, or
-        custom text.
+        Configure spin odds and daily milestone rewards.
       </p>
 
       {isLoading && <p className="empty-state">Loading settings…</p>}
@@ -114,15 +128,31 @@ export function DailySettingsPage() {
 
       {!isLoading && !isError && (
       <>
+      <section className="daily-settings-card neon-card" style={{ marginBottom: "1rem" }}>
+        <h3 className="daily-settings-label">Spin odds</h3>
+        <p className="daily-settings-desc">
+          Chance for each result when you spend a token on the randomizer.
+        </p>
+        <SpinOddsEditor
+          value={settings.spinOutcomeWeights}
+          onChange={updateSpinOdds}
+        />
+      </section>
+
+      <h3 className="settings-section-title">Daily milestones</h3>
+      <p className="daily-settings-desc" style={{ marginTop: 0 }}>
+        Rewards for planning and completing today&apos;s tasks.
+      </p>
+
       <div className="daily-settings-list">
-        {FIELDS.map((field) => (
+        {MILESTONE_FIELDS.map((field) => (
           <section key={field.key} className="daily-settings-card neon-card">
             <h3 className="daily-settings-label">{field.label}</h3>
             <p className="daily-settings-desc">{field.description}</p>
             <RewardPicker
               idPrefix={field.key}
               value={settings[field.key]}
-              onChange={(value) => updateField(field.key, value)}
+              onChange={(value) => updateMilestone(field.key, value)}
               likes={likes}
             />
           </section>

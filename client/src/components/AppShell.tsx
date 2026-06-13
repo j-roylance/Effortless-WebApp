@@ -59,7 +59,7 @@ export function AppShell() {
           Likes
         </NavLink>
         <NavLink to="/daily-settings" className={({ isActive }) => (isActive ? "active" : "")}>
-          Daily
+          Settings
         </NavLink>
         <NavLink to="/visions" className={({ isActive }) => (isActive ? "active" : "")}>
           Vision

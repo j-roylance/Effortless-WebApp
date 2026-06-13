@@ -122,12 +122,13 @@ model RewardToken {
 }
 
 model DailySettings {
-  userId          String   @id
-  planningReward  Json     @default("{\"kind\":\"none\"}")
-  allMustsReward  Json     @default("{\"kind\":\"none\"}")
-  allDoDatesReward Json    @default("{\"kind\":\"none\"}")
-  updatedAt       DateTime @updatedAt
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String   @id
+  planningReward     Json     @default("{\"kind\":\"none\"}")
+  allMustsReward     Json     @default("{\"kind\":\"none\"}")
+  allDoDatesReward   Json     @default("{\"kind\":\"none\"}")
+  spinOutcomeWeights Json     @default("{\"win\":25,\"levelUp\":25,\"noReward\":25,\"levelDown\":25}")
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model DailyBonusClaim {

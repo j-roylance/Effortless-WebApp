@@ -1,19 +1,26 @@
 import type { TaskRewardKind, MilestoneReward } from "./rewards";
 import type { RewardTier } from "./tiers";
+import {
+  DEFAULT_SPIN_OUTCOME_WEIGHTS,
+  type SpinOutcomeWeights,
+} from "./spin-odds";
 
 export type { MilestoneReward } from "./rewards";
 export { NONE_MILESTONE_REWARD, parseMilestoneReward } from "./rewards";
+export type { SpinOutcomeWeights } from "./spin-odds";
 
 export interface DailySettings {
   planningReward: MilestoneReward;
   allMustsReward: MilestoneReward;
   allDoDatesReward: MilestoneReward;
+  spinOutcomeWeights: SpinOutcomeWeights;
 }
 
 export const DEFAULT_DAILY_SETTINGS: DailySettings = {
   planningReward: { kind: "none" },
   allMustsReward: { kind: "none" },
   allDoDatesReward: { kind: "none" },
+  spinOutcomeWeights: { ...DEFAULT_SPIN_OUTCOME_WEIGHTS },
 };
 
 export type OptionalRewardTier = RewardTier | "None";

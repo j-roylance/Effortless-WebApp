@@ -19,19 +19,13 @@ import {
   parseSliceCounts,
   pickWheelWinner,
 } from "../domain/wheel.js";
-
-const OUTCOMES: SpinOutcome[] = [
-  SpinOutcome.Win,
-  SpinOutcome.LevelUp,
-  SpinOutcome.NoReward,
-  SpinOutcome.LevelDown,
-];
+import {
+  DEFAULT_SPIN_OUTCOME_WEIGHTS,
+  parseSpinOutcomeWeights,
+  rollWeightedOutcome,
+} from "../domain/spin-odds.js";
 
 type Tx = Prisma.TransactionClient;
-
-function rollOutcome(): SpinOutcome {
-  return OUTCOMES[Math.floor(Math.random() * OUTCOMES.length)]!;
-}
 
 function effectiveTierForOutcome(tokenTier: RewardTier, outcome: SpinOutcome): RewardTier {
   switch (outcome) {
@@ -113,6 +107,14 @@ export async function executeSpin(
 ): Promise<SpinResult> {
   const timeZone = safeTimeZone(timeZoneInput);
 
+  const settingsRow = await prisma.dailySettings.findUnique({
+    where: { userId },
+    select: { spinOutcomeWeights: true },
+  });
+  const outcomeWeights = parseSpinOutcomeWeights(
+    settingsRow?.spinOutcomeWeights ?? DEFAULT_SPIN_OUTCOME_WEIGHTS
+  );
+
   const spinCore = await prisma.$transaction(async (tx) => {
     const claimCount = await countClaimsInBucket(userId, tokenTier, timeZone, tx);
     if (!canClaimTier(tokenTier, claimCount)) {
@@ -130,7 +132,7 @@ export async function executeSpin(
       throw Object.assign(new Error("No unspent token for this tier"), { status: 400 });
     }
 
-    let outcome = rollOutcome();
+    let outcome = rollWeightedOutcome(outcomeWeights);
     let effectiveTier = effectiveTierForOutcome(tokenTier, outcome);
 
     if (shouldSpinForOutcome(tokenTier, outcome)) {

@@ -1,5 +1,5 @@
-import { RewardTier } from "@prisma/client";
 import { Router } from "express";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
@@ -10,6 +10,11 @@ import {
   parseMilestoneReward,
   type MilestoneReward,
 } from "../domain/rewards.js";
+import {
+  parseSpinOutcomeWeights,
+  spinOutcomeWeightsToJson,
+  validateSpinOutcomeWeights,
+} from "../domain/spin-odds.js";
 import {
   claimPlanningBonus,
 } from "../services/daily-rewards.js";
@@ -33,21 +38,31 @@ const milestoneRewardSchema = z.union([
   }),
 ]);
 
+const spinOutcomeWeightsSchema = z.object({
+  win: z.number().int().min(0).max(100),
+  levelUp: z.number().int().min(0).max(100),
+  noReward: z.number().int().min(0).max(100),
+  levelDown: z.number().int().min(0).max(100),
+});
+
 const saveSchema = z.object({
   planningReward: milestoneRewardSchema.optional(),
   allMustsReward: milestoneRewardSchema.optional(),
   allDoDatesReward: milestoneRewardSchema.optional(),
+  spinOutcomeWeights: spinOutcomeWeightsSchema.optional(),
 });
 
 function serializeSettings(row: {
   planningReward: unknown;
   allMustsReward: unknown;
   allDoDatesReward: unknown;
+  spinOutcomeWeights: unknown;
 }) {
   return {
     planningReward: parseMilestoneReward(row.planningReward),
     allMustsReward: parseMilestoneReward(row.allMustsReward),
     allDoDatesReward: parseMilestoneReward(row.allDoDatesReward),
+    spinOutcomeWeights: parseSpinOutcomeWeights(row.spinOutcomeWeights),
   };
 }
 
@@ -72,6 +87,7 @@ dailySettingsRouter.get("/", async (req: AuthedRequest, res) => {
       planningReward: { kind: "none" },
       allMustsReward: { kind: "none" },
       allDoDatesReward: { kind: "none" },
+      spinOutcomeWeights: parseSpinOutcomeWeights(null),
     });
     return;
   }
@@ -92,6 +108,17 @@ dailySettingsRouter.put("/", async (req: AuthedRequest, res) => {
     const allDoDatesReward = body.allDoDatesReward
       ? parseMilestoneReward(body.allDoDatesReward)
       : undefined;
+    const spinOutcomeWeights = body.spinOutcomeWeights
+      ? parseSpinOutcomeWeights(body.spinOutcomeWeights)
+      : undefined;
+
+    if (spinOutcomeWeights) {
+      const oddsErr = validateSpinOutcomeWeights(spinOutcomeWeights);
+      if (oddsErr) {
+        res.status(400).json({ error: oddsErr });
+        return;
+      }
+    }
 
     for (const reward of [planningReward, allMustsReward, allDoDatesReward]) {
       if (!reward) continue;
@@ -106,11 +133,16 @@ dailySettingsRouter.put("/", async (req: AuthedRequest, res) => {
       planningReward?: ReturnType<typeof milestoneRewardToJson>;
       allMustsReward?: ReturnType<typeof milestoneRewardToJson>;
       allDoDatesReward?: ReturnType<typeof milestoneRewardToJson>;
+      spinOutcomeWeights?: Prisma.InputJsonValue;
     } = {};
 
     if (planningReward) data.planningReward = milestoneRewardToJson(planningReward);
     if (allMustsReward) data.allMustsReward = milestoneRewardToJson(allMustsReward);
     if (allDoDatesReward) data.allDoDatesReward = milestoneRewardToJson(allDoDatesReward);
+    if (spinOutcomeWeights) {
+      const json = spinOutcomeWeightsToJson(spinOutcomeWeights);
+      data.spinOutcomeWeights = json as unknown as Prisma.InputJsonValue;
+    }
 
     const row = await prisma.dailySettings.upsert({
       where: { userId },

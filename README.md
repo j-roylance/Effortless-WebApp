@@ -8,7 +8,7 @@ Mobile-first life pattern app: tasks, visions, calendar planning, and a token + 
 2. **Tasks** — Must / Should / Could to-dos; **Achieve** earns tier tokens; new tasks grant +1 Bronze.
 3. **Calendar** — day timeline for do/due dates; drag to reschedule; daily planning bonus.
 4. **Likes** — things you enjoy per tier; **Spin** spends a token (server-side randomizer).
-5. **Daily** — optional bonus tokens for planning, all Musts done, all do-dates done.
+5. **Settings** — spin odds and optional daily milestone rewards (planning, all Musts, all do-dates).
 6. **Vision** — life visions with backward goal chains (check off, edit, add steps).
 7. **AI** — generate copy-paste prompts for external assistants (vision/goal breakdown).
 

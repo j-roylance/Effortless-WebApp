@@ -47,7 +47,8 @@ Local dev: Vite proxies `/api` to `localhost:4000` ([`client/vite.config.ts`](cl
 | `api/types.ts` | DTOs shared across pages |
 | `domain/tiers.ts` | Tier names/colors (mirror server enums) |
 | `domain/ai-prompts.ts` | Static prompt templates for AI tab |
-| `hooks/useTokenRewardQueue.ts` | Queue multiple token modals in sequence |
+| `hooks/useRewardQueue.ts` | Queue token + definite reward modals after achieve |
+| `domain/spin.ts` | Spin animation timing + `spinNeedsLikeWheel` helper |
 | `pages/TasksPage.tsx` | List, achieve, token chip |
 | `pages/TaskFormPage.tsx` | Create/edit task (also embedded in Calendar) |
 | `pages/CalendarPage.tsx` | Day timeline, drag reschedule, planning |
@@ -56,7 +57,9 @@ Local dev: Vite proxies `/api` to `localhost:4000` ([`client/vite.config.ts`](cl
 | `pages/VisionChainPage.tsx` | Vertical goal chain |
 | `pages/AiPage.tsx` | Vision / goal breakdown prompt builders |
 | `pages/WelcomePage.tsx` | Post-signup onboarding (no shell) |
-| `components/RandomizerModal.tsx` | Calls POST `/api/spin`, shows outcome + wheel |
+| `components/RandomizerModal.tsx` | POST `/api/spin`; outcome roll → wheel → result |
+| `components/OutcomeRoll.tsx` | Client-only dice roll through four outcomes |
+| `components/SpinnerWheel.tsx` | Animates to server-picked like slice |
 
 ## Database (Prisma)
 
@@ -93,7 +96,7 @@ Legacy rows may still use `habit_create` / `habit_achieve` or historical `spin_l
 3. Roll outcome from user-configured weights (Settings tab): reward / step up / none / step down (default 25% each).
 4. If Win, LevelUp, or LevelDown (not from Bronze): pick random like (`UserReward`) at effective tier; enforce cap on effective tier. Bronze step down grants nothing.
 
-Client wheel only animates to the index the server returns.
+Client wheel only animates to the index the server returns. Outcome roll and wheel animations are cosmetic; Skip bypasses waits only.
 
 ## Onboarding flow
 

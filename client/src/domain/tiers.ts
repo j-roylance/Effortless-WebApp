@@ -64,3 +64,21 @@ export const OUTCOME_LABELS: Record<SpinOutcome, string> = {
   NoReward: "Nothing",
   LevelDown: "Step down",
 };
+
+export const OUTCOME_ROLL_ORDER: SpinOutcome[] = [
+  "Win",
+  "LevelUp",
+  "NoReward",
+  "LevelDown",
+];
+
+/** Short labels + symbols for the outcome dice roll animation. */
+export const OUTCOME_ROLL_DISPLAY: Record<
+  SpinOutcome,
+  { label: string; symbol: string }
+> = {
+  Win: { label: "Reward", symbol: "★" },
+  LevelUp: { label: "Step up", symbol: "↑" },
+  NoReward: { label: "None", symbol: "—" },
+  LevelDown: { label: "Step down", symbol: "↓" },
+};

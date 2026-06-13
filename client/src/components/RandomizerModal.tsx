@@ -1,18 +1,32 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { SpinResult } from "../api/types";
 import { DEFAULT_DAILY_SETTINGS, type DailySettings } from "../domain/daily";
 import { formatSpinOddsSummary } from "../domain/spin-odds";
+import { OUTCOME_REVEAL_MS, spinNeedsLikeWheel } from "../domain/spin";
 import {
   OUTCOME_LABELS,
   TIER_COLORS,
   type RewardTier,
   type SpinOutcome,
 } from "../domain/tiers";
+import { OutcomeRoll } from "./OutcomeRoll";
 import { SpinnerWheel } from "./SpinnerWheel";
 
-type Phase = "idle" | "outcome" | "spinning" | "done";
+/**
+ * Spin flow (client animation only; outcome is decided on the server):
+ * idle → outcomeRoll → outcomeReveal → [spinning] → done
+ */
+type Phase = "idle" | "outcomeRoll" | "outcomeReveal" | "spinning" | "done";
+
+function SkipAnimationButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="skip-animation-btn" onClick={onClick}>
+      Skip
+    </button>
+  );
+}
 
 export function RandomizerModal({
   tokenTier,
@@ -24,6 +38,11 @@ export function RandomizerModal({
   const queryClient = useQueryClient();
   const [phase, setPhase] = useState<Phase>("idle");
   const [result, setResult] = useState<SpinResult | null>(null);
+  const [skipOutcomeRoll, setSkipOutcomeRoll] = useState(false);
+  const [skipWheel, setSkipWheel] = useState(false);
+
+  const revealTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const mountedRef = useRef(true);
 
   const { data: settings } = useQuery({
     queryKey: ["daily-settings"],
@@ -33,6 +52,29 @@ export function RandomizerModal({
     settings?.spinOutcomeWeights ?? DEFAULT_DAILY_SETTINGS.spinOutcomeWeights
   );
 
+  const advanceFromReveal = useCallback((data: SpinResult, skipped: boolean) => {
+    if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+    const delay = skipped ? 0 : OUTCOME_REVEAL_MS;
+
+    revealTimerRef.current = setTimeout(() => {
+      if (!mountedRef.current) return;
+      if (spinNeedsLikeWheel(data)) {
+        setSkipWheel(false);
+        setPhase("spinning");
+      } else {
+        setPhase("done");
+      }
+    }, delay);
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+    };
+  }, []);
+
   const spinMutation = useMutation({
     mutationFn: () =>
       api<SpinResult>("/spin", {
@@ -41,26 +83,21 @@ export function RandomizerModal({
       }),
     onSuccess: (data) => {
       setResult(data);
-      setPhase("outcome");
+      setSkipOutcomeRoll(false);
+      setSkipWheel(false);
+      setPhase("outcomeRoll");
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
-      setTimeout(() => {
-        const needsSpinner =
-          (data.outcome === "Win" ||
-            data.outcome === "LevelUp" ||
-            data.outcome === "LevelDown") &&
-          data.spinnerLikes.length > 0;
-        if (needsSpinner) {
-          setPhase("spinning");
-        } else {
-          setPhase("done");
-        }
-      }, 1500);
     },
   });
 
+  function handleOutcomeRollComplete(skipped = false) {
+    if (!result) return;
+    setPhase("outcomeReveal");
+    advanceFromReveal(result, skipped);
+  }
+
   const outcome = result?.outcome;
-  const showSpinner =
-    phase === "spinning" && result && result.spinnerLikes.length > 0;
+  const showWheel = phase === "spinning" && result && result.spinnerLikes.length > 0;
 
   return (
     <div className="modal-overlay" onClick={onClose} role="presentation">
@@ -99,20 +136,39 @@ export function RandomizerModal({
           </>
         )}
 
-        {outcome && phase !== "idle" && (
-          <div className="outcome-flash" style={{ borderColor: TIER_COLORS[result!.effectiveTier] }}>
+        {phase === "outcomeRoll" && result && (
+          <>
+            <OutcomeRoll
+              finalOutcome={result.outcome as SpinOutcome}
+              tierColor={TIER_COLORS[result.effectiveTier]}
+              skip={skipOutcomeRoll}
+              onComplete={handleOutcomeRollComplete}
+            />
+            <SkipAnimationButton onClick={() => setSkipOutcomeRoll(true)} />
+          </>
+        )}
+
+        {phase === "outcomeReveal" && outcome && result && (
+          <div
+            className="outcome-flash outcome-flash--reveal"
+            style={{ borderColor: TIER_COLORS[result.effectiveTier] }}
+          >
             {OUTCOME_LABELS[outcome as SpinOutcome]}
           </div>
         )}
 
-        {showSpinner && result && (
-          <SpinnerWheel
-            slices={result.spinnerLikes}
-            winningIndex={result.winningIndex}
-            tier={result.effectiveTier}
-            spinning={phase === "spinning"}
-            onSpinEnd={() => setPhase("done")}
-          />
+        {showWheel && result && (
+          <>
+            <SpinnerWheel
+              slices={result.spinnerLikes}
+              winningIndex={result.winningIndex}
+              tier={result.effectiveTier}
+              spinning
+              skip={skipWheel}
+              onSpinEnd={() => setPhase("done")}
+            />
+            <SkipAnimationButton onClick={() => setSkipWheel(true)} />
+          </>
         )}
 
         {phase === "done" && result && (
@@ -136,10 +192,6 @@ export function RandomizerModal({
               Done
             </button>
           </div>
-        )}
-
-        {(phase === "outcome" || phase === "spinning") && !showSpinner && (
-          <p style={{ textAlign: "center", color: "var(--text-dim)" }}>Processing…</p>
         )}
       </div>
     </div>

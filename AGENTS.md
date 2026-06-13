@@ -29,7 +29,8 @@ Grep hits for `habit` in old token `source` values are expected.
 | AI prompt text | `client/src/domain/ai-prompts.ts` |
 | UI screens | `client/src/pages/` |
 | Shared page chrome | `client/src/components/PageHeader.tsx` |
-| Token earn modals | `useTokenRewardQueue`, `TokenRewardModalHost` |
+| Token earn modals | `useRewardQueue`, `RewardModalHost` |
+| Spin UI / animations | `RandomizerModal`, `OutcomeRoll`, `SpinnerWheel`, `client/src/domain/spin.ts` |
 | Calendar / repeat overrides | `client/src/domain/calendar.ts`, `schedule-overrides.ts`, `PATCH /tasks/:id` with `occurrenceDayKey` |
 | Task / daily rewards | `rewardKind` on `Habit`, `planningReward` JSON on `DailySettings`, `client/src/components/RewardPicker.tsx` |
 | Schema | `server/prisma/schema.prisma` → `npx prisma migrate dev` |

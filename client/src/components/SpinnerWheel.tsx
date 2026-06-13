@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { WHEEL_SPIN_DURATION_MS } from "../domain/spin";
 import type { RewardTier } from "../domain/tiers";
 import { TIER_COLORS } from "../domain/tiers";
 
@@ -8,41 +9,72 @@ interface Slice {
   empty?: boolean;
 }
 
+function computeFinalRotation(sliceCount: number, winningIndex: number): number {
+  const sliceAngle = 360 / sliceCount;
+  const targetAngle = 360 - (winningIndex * sliceAngle + sliceAngle / 2);
+  return 5 * 360 + targetAngle;
+}
+
+/** Animates a conic-gradient wheel to the slice index the server chose. */
 export function SpinnerWheel({
   slices,
   winningIndex,
   tier,
   spinning,
+  skip,
   onSpinEnd,
 }: {
   slices: Slice[];
   winningIndex: number;
   tier: RewardTier;
   spinning: boolean;
+  skip?: boolean;
   onSpinEnd?: () => void;
 }) {
-  const wheelRef = useRef<HTMLDivElement>(null);
   const [rotation, setRotation] = useState(0);
+  const [instant, setInstant] = useState(false);
+  const endTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const finishedRef = useRef(false);
+  const onSpinEndRef = useRef(onSpinEnd);
   const color = TIER_COLORS[tier];
+
+  onSpinEndRef.current = onSpinEnd;
+
+  const finalRotation = useMemo(
+    () => (slices.length > 0 ? computeFinalRotation(slices.length, winningIndex) : 0),
+    [slices.length, winningIndex]
+  );
+
+  function finish() {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    onSpinEndRef.current?.();
+  }
 
   useEffect(() => {
     if (!spinning || slices.length === 0) return;
 
-    const sliceAngle = 360 / slices.length;
-    const targetAngle = 360 - (winningIndex * sliceAngle + sliceAngle / 2);
-    const fullSpins = 5 * 360;
-    const finalRotation = fullSpins + targetAngle;
+    finishedRef.current = false;
+    setInstant(false);
+    setRotation(0);
 
-    requestAnimationFrame(() => {
-      setRotation(finalRotation);
-    });
+    const startFrame = requestAnimationFrame(() => setRotation(finalRotation));
+    endTimerRef.current = setTimeout(finish, WHEEL_SPIN_DURATION_MS);
 
-    const timer = setTimeout(() => {
-      onSpinEnd?.();
-    }, 4200);
+    return () => {
+      cancelAnimationFrame(startFrame);
+      if (endTimerRef.current) clearTimeout(endTimerRef.current);
+    };
+  }, [spinning, slices.length, winningIndex, finalRotation]);
 
-    return () => clearTimeout(timer);
-  }, [spinning, slices.length, winningIndex, onSpinEnd]);
+  useEffect(() => {
+    if (!skip || !spinning || finishedRef.current) return;
+
+    if (endTimerRef.current) clearTimeout(endTimerRef.current);
+    setInstant(true);
+    setRotation(finalRotation);
+    requestAnimationFrame(finish);
+  }, [skip, spinning, finalRotation]);
 
   if (slices.length === 0) {
     return (
@@ -69,8 +101,7 @@ export function SpinnerWheel({
     <div className="spinner-container">
       <div className="spinner-pointer" />
       <div
-        ref={wheelRef}
-        className="spinner-wheel"
+        className={`spinner-wheel${instant ? " spinner-wheel--instant" : ""}`}
         style={{
           position: "relative",
           transform: `rotate(${rotation}deg)`,

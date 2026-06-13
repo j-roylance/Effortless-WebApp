@@ -16,12 +16,14 @@ import {
   entriesForDay,
   formatHourLabel,
   isPlanningDone,
+  isSameLocalDay,
   minutesFromPointerY,
   dateTimeFromMinutes,
   setPlanningDone,
   todayDateInput,
   type CalendarEntry,
 } from "../domain/calendar";
+import { resolveOccurrenceForDay } from "../domain/schedule-overrides";
 import { isTaskAchievedToday, toLocalDateInput } from "../domain/recurrence";
 import { TASK_SECTION_COLOR, normalizeSection } from "../domain/tasks";
 
@@ -83,6 +85,35 @@ export function CalendarPage() {
       minutes: number;
     }) => {
       const iso = dateTimeFromMinutes(selectedDate, minutes);
+      const dayKey = entry.occurrenceDayKey ?? selectedDate;
+
+      if (entry.isRecurringInstance) {
+        if (entry.type === "do") {
+          const occurrence = resolveOccurrenceForDay(task, dayKey);
+          let dueAt: string | null | undefined = occurrence?.dueAt ?? undefined;
+          if (occurrence?.dueAt && isSameLocalDay(occurrence.dueAt, dayKey)) {
+            const delta =
+              new Date(iso).getTime() - new Date(occurrence.scheduledAt).getTime();
+            dueAt = new Date(new Date(occurrence.dueAt).getTime() + delta).toISOString();
+          }
+          return api(`/tasks/${task.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              occurrenceDayKey: dayKey,
+              scheduledAt: iso,
+              dueAt,
+            }),
+          });
+        }
+        return api(`/tasks/${task.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            occurrenceDayKey: dayKey,
+            dueAt: iso,
+          }),
+        });
+      }
+
       const body =
         entry.type === "do"
           ? {
@@ -261,7 +292,8 @@ export function CalendarPage() {
           <div className="calendar-events-layer">
             {entries.map((entry) => {
               const showAchieve =
-                entry.type === "do" || !doTaskIds.has(entry.taskId);
+                isToday &&
+                (entry.type === "do" || !doTaskIds.has(entry.taskId));
               const achievedToday = isTaskAchievedToday(entry.task.achievedAt);
               const isDraggingThis = dragging?.key === entry.key;
               const topMinutes = isDraggingThis && dragMinutes !== null
@@ -275,8 +307,8 @@ export function CalendarPage() {
                 <div
                   key={entry.key}
                   className={`calendar-event calendar-event--${entry.type}${
-                    isDraggingThis ? " calendar-event--dragging" : ""
-                  }`}
+                    entry.isRecurringInstance ? " calendar-event--recurring" : ""
+                  }${isDraggingThis ? " calendar-event--dragging" : ""}`}
                   style={{
                     top,
                     height: Math.max(height, 28),
@@ -294,6 +326,7 @@ export function CalendarPage() {
                     <span className="calendar-event-name">{entry.task.name}</span>
                     <span className="calendar-event-type">
                       {entry.type === "do" ? "Do" : "Due"}
+                      {entry.isRecurringInstance ? " · Repeat" : ""}
                     </span>
                   </div>
                   <div className="calendar-event-actions">

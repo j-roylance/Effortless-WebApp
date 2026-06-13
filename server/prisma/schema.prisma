@@ -73,6 +73,7 @@ model Habit {
   dueAt            DateTime?
   recurrence       TaskRecurrence @default(None)
   recurrenceConfig Json?
+  scheduleOverrides Json?
   persistAfterDone Boolean        @default(true)
   sortOrder        Int            @default(0)
   achievedAt       DateTime?

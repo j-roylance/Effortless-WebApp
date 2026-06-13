@@ -127,11 +127,13 @@ export function TaskFormPage({
 
   function validateForm(): string | null {
     if (!name.trim()) return "Name is required";
-    if (enableScheduled && (!scheduledDate || !scheduledTime)) {
-      return "Do date requires a date and time";
-    }
-    if (enableDue && (!dueDate || !dueTime)) {
-      return "Due date requires a date and time";
+    if (recurrence === "None") {
+      if (enableScheduled && (!scheduledDate || !scheduledTime)) {
+        return "Do date requires a date and time";
+      }
+      if (enableDue && (!dueDate || !dueTime)) {
+        return "Due date requires a date and time";
+      }
     }
     if (recurrence === "Weekly" && daysOfWeek.length === 0) {
       return "Pick at least one day for weekly recurrence";
@@ -147,19 +149,26 @@ export function TaskFormPage({
       const validationError = validateForm();
       if (validationError) throw new Error(validationError);
 
+      const isRepeating = recurrence !== "None";
       const body = {
         name,
         tier,
         section,
         persistAfterDone,
-        scheduledAt: enableScheduled
-          ? toISOFromLocal(scheduledDate, scheduledTime)
-          : null,
+        scheduledAt: isRepeating
+          ? null
+          : enableScheduled
+            ? toISOFromLocal(scheduledDate, scheduledTime)
+            : null,
         durationMinutes:
-          enableScheduled && durationMinutes
+          (isRepeating || enableScheduled) && durationMinutes
             ? Number.parseInt(durationMinutes, 10)
             : null,
-        dueAt: enableDue ? toISOFromLocal(dueDate, dueTime) : null,
+        dueAt: isRepeating
+          ? null
+          : enableDue
+            ? toISOFromLocal(dueDate, dueTime)
+            : null,
         recurrence,
         recurrenceConfig: buildRecurrenceConfig(),
       };
@@ -302,10 +311,11 @@ export function TaskFormPage({
               type="checkbox"
               checked={enableScheduled}
               onChange={(e) => setEnableScheduled(e.target.checked)}
+              disabled={recurrence !== "None"}
             />
             Set do date &amp; planned length
           </label>
-          {enableScheduled && (
+          {recurrence === "None" && enableScheduled && (
             <div className="schedule-fields">
               <div className="datetime-row">
                 <input
@@ -344,10 +354,11 @@ export function TaskFormPage({
               type="checkbox"
               checked={enableDue}
               onChange={(e) => setEnableDue(e.target.checked)}
+              disabled={recurrence !== "None"}
             />
             Set due date
           </label>
-          {enableDue && (
+          {recurrence === "None" && enableDue && (
             <div className="schedule-fields">
               <div className="datetime-row">
                 <input
@@ -433,6 +444,23 @@ export function TaskFormPage({
                   </div>
                 </>
               )}
+
+              <label htmlFor="repeatDuration" className="schedule-sub-label">
+                Planned length (minutes)
+              </label>
+              <input
+                id="repeatDuration"
+                type="number"
+                min={1}
+                max={1440}
+                className="neon-input"
+                placeholder="e.g. 30"
+                value={durationMinutes}
+                onChange={(e) => setDurationMinutes(e.target.value)}
+              />
+              <p className="schedule-hint">
+                Due time on the calendar is do time plus this length.
+              </p>
             </div>
           )}
         </fieldset>

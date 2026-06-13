@@ -1,10 +1,11 @@
-import { RewardTier, TaskSection, type Habit, type Prisma } from "@prisma/client";
+import { RewardTier, TaskRecurrence, TaskSection, type Habit, type Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import {
   dayKeyForTimezone,
   isSameDayInTimezone,
   type DailyBonusType,
 } from "../domain/daily.js";
+import { taskOccursOnDay } from "../domain/schedule-overrides.js";
 
 export interface BonusToken {
   tier: RewardTier;
@@ -23,7 +24,12 @@ export async function getDailySettings(userId: string) {
 }
 
 function tasksScheduledOnDay(tasks: Habit[], dayKey: string, timeZone: string): Habit[] {
-  return tasks.filter((t) => isSameDayInTimezone(t.scheduledAt, dayKey, timeZone));
+  return tasks.filter((t) => {
+    if (t.recurrence !== TaskRecurrence.None) {
+      return taskOccursOnDay(t, dayKey, timeZone);
+    }
+    return isSameDayInTimezone(t.scheduledAt, dayKey, timeZone);
+  });
 }
 
 function tasksAchievedOnDay(tasks: Habit[], dayKey: string, timeZone: string): Habit[] {

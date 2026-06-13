@@ -11,6 +11,11 @@ import {
   parseRecurrenceConfig,
   type RecurrenceConfig,
 } from "../domain/recurrence.js";
+import {
+  mergeOccurrenceOverride,
+  parseScheduleOverrides,
+  taskOccursOnDay,
+} from "../domain/schedule-overrides.js";
 import { dayKeyForTimezone, isSameDayInTimezone, safeTimeZone } from "../domain/daily.js";
 import { evaluateAchievementBonuses } from "../services/daily-rewards.js";
 
@@ -36,7 +41,13 @@ const taskBodySchema = z.object({
   recurrence: z.nativeEnum(TaskRecurrence).optional(),
   recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
   persistAfterDone: z.boolean().optional(),
+  occurrenceDayKey: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
+
+const taskPatchSchema = taskBodySchema.partial();
 
 async function nextSortOrder(userId: string, section: TaskSection): Promise<number> {
   const count = await prisma.habit.count({
@@ -107,18 +118,27 @@ function toJsonConfig(config: RecurrenceConfig | null): Prisma.InputJsonValue | 
   return config as unknown as Prisma.InputJsonValue;
 }
 
+function toJsonOverrides(
+  overrides: ReturnType<typeof parseScheduleOverrides>
+): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  if (!overrides) return Prisma.JsonNull;
+  return overrides as unknown as Prisma.InputJsonValue;
+}
+
 function serializeTask(row: {
   section: TaskSection;
   scheduledAt: Date | null;
   dueAt: Date | null;
   recurrence: TaskRecurrence;
   recurrenceConfig: unknown;
+  scheduleOverrides?: unknown;
   [key: string]: unknown;
 }) {
   return {
     ...row,
     section: normalizeSection(row.section),
     recurrenceConfig: parseRecurrenceConfig(row.recurrenceConfig),
+    scheduleOverrides: parseScheduleOverrides(row.scheduleOverrides),
   };
 }
 
@@ -179,12 +199,45 @@ tasksRouter.post("/", async (req: AuthedRequest, res) => {
 tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
   try {
     const taskId = String(req.params.id);
-    const body = taskBodySchema.partial().parse(req.body);
+    const body = taskPatchSchema.parse(req.body);
     const existing = await prisma.habit.findFirst({
       where: { id: taskId, userId: req.user!.userId },
     });
     if (!existing) {
       res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    const occurrenceDayKey = body.occurrenceDayKey;
+    const isOccurrencePatch =
+      !!occurrenceDayKey &&
+      (body.scheduledAt !== undefined || body.dueAt !== undefined);
+
+    if (isOccurrencePatch) {
+      if (existing.recurrence === TaskRecurrence.None) {
+        res.status(400).json({ error: "Occurrence overrides require a repeating task" });
+        return;
+      }
+      const timeZone = safeTimeZone(req.headers["x-timezone"] as string);
+      if (!taskOccursOnDay(existing, occurrenceDayKey, timeZone)) {
+        res.status(400).json({ error: "Task does not occur on that day" });
+        return;
+      }
+
+      const patch: { scheduledAt?: string; dueAt?: string | null } = {};
+      if (body.scheduledAt !== undefined) {
+        patch.scheduledAt = body.scheduledAt ?? undefined;
+      }
+      if (body.dueAt !== undefined) {
+        patch.dueAt = body.dueAt;
+      }
+
+      const scheduleOverrides = mergeOccurrenceOverride(existing, occurrenceDayKey, patch);
+      const task = await prisma.habit.update({
+        where: { id: existing.id },
+        data: { scheduleOverrides: toJsonOverrides(scheduleOverrides) },
+      });
+      res.json({ task: serializeTask(task) });
       return;
     }
 
@@ -201,19 +254,29 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
 
     let scheduleUpdate: ReturnType<typeof resolveScheduleFields> | null = null;
     if (scheduleTouched) {
+      const nextRecurrence =
+        body.recurrence !== undefined ? body.recurrence : existing.recurrence;
+      const useRecurringDefaults =
+        nextRecurrence !== TaskRecurrence.None &&
+        body.scheduledAt === null &&
+        body.dueAt === null;
+
       scheduleUpdate = resolveScheduleFields({
-        scheduledAt:
-          body.scheduledAt !== undefined
+        scheduledAt: useRecurringDefaults
+          ? null
+          : body.scheduledAt !== undefined
             ? body.scheduledAt
             : existing.scheduledAt?.toISOString() ?? null,
         durationMinutes:
           body.durationMinutes !== undefined
             ? body.durationMinutes
             : existing.durationMinutes,
-        dueAt:
-          body.dueAt !== undefined ? body.dueAt : existing.dueAt?.toISOString() ?? null,
-        recurrence:
-          body.recurrence !== undefined ? body.recurrence : existing.recurrence,
+        dueAt: useRecurringDefaults
+          ? null
+          : body.dueAt !== undefined
+            ? body.dueAt
+            : existing.dueAt?.toISOString() ?? null,
+        recurrence: nextRecurrence,
         recurrenceConfig:
           body.recurrenceConfig !== undefined
             ? body.recurrenceConfig
@@ -236,6 +299,9 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
           dueAt: scheduleUpdate.dueAt,
           recurrence: scheduleUpdate.recurrence,
           recurrenceConfig: toJsonConfig(scheduleUpdate.recurrenceConfig),
+          ...(scheduleUpdate.recurrence === TaskRecurrence.None && {
+            scheduleOverrides: Prisma.JsonNull,
+          }),
         }),
         ...(body.persistAfterDone !== undefined && {
           persistAfterDone: body.persistAfterDone,

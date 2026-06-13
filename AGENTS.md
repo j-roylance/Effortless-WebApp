@@ -29,6 +29,7 @@ Grep hits for `habit` in old token `source` values are expected.
 | UI screens | `client/src/pages/` |
 | Shared page chrome | `client/src/components/PageHeader.tsx` |
 | Token earn modals | `useTokenRewardQueue`, `TokenRewardModalHost` |
+| Calendar / repeat overrides | `client/src/domain/calendar.ts`, `schedule-overrides.ts`, `PATCH /tasks/:id` with `occurrenceDayKey` |
 | Schema | `server/prisma/schema.prisma` → `npx prisma migrate dev` |
 
 ## Routes (UI → page → API)
@@ -66,3 +67,4 @@ Root is `.` on Vercel; `vercel.json` builds `server` then `client`. API handler 
 - `JWT_SECRET` and `CLIENT_URL` required in production
 - Supabase: `DATABASE_URL` = pooler :6543, `DIRECT_URL` = session :5432
 - Client sends `X-Timezone` header (`api/client.ts`) for spin schedule and daily bonuses
+- Repeating tasks: series rule in `recurrence` + `recurrenceConfig`; per-day drag overrides in `scheduleOverrides`; calendar PATCH uses `occurrenceDayKey` (YYYY-MM-DD)

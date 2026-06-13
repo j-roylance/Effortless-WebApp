@@ -18,6 +18,7 @@ export interface Task {
   dueAt: string | null;
   recurrence: TaskRecurrence;
   recurrenceConfig: RecurrenceConfig | null;
+  scheduleOverrides: Record<string, { scheduledAt?: string; dueAt?: string | null }> | null;
   persistAfterDone: boolean;
   sortOrder: number;
   achievedAt: string | null;

@@ -1,5 +1,6 @@
 import type { Task } from "../api/types";
 import { toLocalDateInput } from "./recurrence";
+import { resolveOccurrenceForDay, taskOccursOnDay } from "./schedule-overrides";
 
 export const CALENDAR_HOUR_HEIGHT = 48;
 export const CALENDAR_DAY_MINUTES = 24 * 60;
@@ -16,6 +17,8 @@ export interface CalendarEntry {
   type: CalendarEntryType;
   startMinutes: number;
   durationMinutes: number;
+  occurrenceDayKey?: string;
+  isRecurringInstance: boolean;
 }
 
 export function todayDateInput(): string {
@@ -62,33 +65,83 @@ export function formatHourLabel(hour: number): string {
   return `${hour - 12} PM`;
 }
 
+function pushEntry(
+  entries: CalendarEntry[],
+  task: Task,
+  dateInput: string,
+  type: CalendarEntryType,
+  iso: string,
+  durationMinutes: number,
+  isRecurringInstance: boolean
+) {
+  entries.push({
+    key: isRecurringInstance ? `${task.id}-${dateInput}-${type}` : `${task.id}-${type}`,
+    taskId: task.id,
+    task,
+    type,
+    startMinutes: minutesFromDate(iso),
+    durationMinutes,
+    occurrenceDayKey: isRecurringInstance ? dateInput : undefined,
+    isRecurringInstance,
+  });
+}
+
 export function entriesForDay(tasks: Task[], dateInput: string): CalendarEntry[] {
   const entries: CalendarEntry[] = [];
 
   for (const task of tasks) {
+    if (task.recurrence !== "None" && taskOccursOnDay(task, dateInput)) {
+      const occurrence = resolveOccurrenceForDay(task, dateInput);
+      if (!occurrence) continue;
+
+      if (isSameLocalDay(occurrence.scheduledAt, dateInput)) {
+        pushEntry(
+          entries,
+          task,
+          dateInput,
+          "do",
+          occurrence.scheduledAt,
+          Math.max(CALENDAR_MIN_DO_MINUTES, task.durationMinutes ?? CALENDAR_MIN_DO_MINUTES),
+          true
+        );
+      }
+
+      if (occurrence.dueAt && isSameLocalDay(occurrence.dueAt, dateInput)) {
+        pushEntry(
+          entries,
+          task,
+          dateInput,
+          "due",
+          occurrence.dueAt,
+          CALENDAR_DEFAULT_DUE_MINUTES,
+          true
+        );
+      }
+      continue;
+    }
+
     if (isSameLocalDay(task.scheduledAt, dateInput)) {
-      entries.push({
-        key: `${task.id}-do`,
-        taskId: task.id,
+      pushEntry(
+        entries,
         task,
-        type: "do",
-        startMinutes: minutesFromDate(task.scheduledAt!),
-        durationMinutes: Math.max(
-          CALENDAR_MIN_DO_MINUTES,
-          task.durationMinutes ?? CALENDAR_MIN_DO_MINUTES
-        ),
-      });
+        dateInput,
+        "do",
+        task.scheduledAt!,
+        Math.max(CALENDAR_MIN_DO_MINUTES, task.durationMinutes ?? CALENDAR_MIN_DO_MINUTES),
+        false
+      );
     }
 
     if (isSameLocalDay(task.dueAt, dateInput)) {
-      entries.push({
-        key: `${task.id}-due`,
-        taskId: task.id,
+      pushEntry(
+        entries,
         task,
-        type: "due",
-        startMinutes: minutesFromDate(task.dueAt!),
-        durationMinutes: CALENDAR_DEFAULT_DUE_MINUTES,
-      });
+        dateInput,
+        "due",
+        task.dueAt!,
+        CALENDAR_DEFAULT_DUE_MINUTES,
+        false
+      );
     }
   }
 

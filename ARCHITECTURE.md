@@ -91,7 +91,7 @@ Legacy rows may still use `habit_create` / `habit_achieve` or historical `spin_l
 1. Reject if schedule cap reached for spent tier.
 2. Spend oldest unspent token of that tier.
 3. Roll outcome: Win / LevelUp / NoReward / LevelDown (25% each).
-4. If Win or LevelUp: pick random like (`UserReward`) at effective tier; enforce cap on effective tier.
+4. If Win, LevelUp, or LevelDown (not from Bronze): pick random like (`UserReward`) at effective tier; enforce cap on effective tier. Bronze step down grants nothing.
 
 Client wheel only animates to the index the server returns.
 

@@ -35,7 +35,9 @@ export function RandomizerModal({
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
       setTimeout(() => {
         const needsSpinner =
-          (data.outcome === "Win" || data.outcome === "LevelUp") &&
+          (data.outcome === "Win" ||
+            data.outcome === "LevelUp" ||
+            data.outcome === "LevelDown") &&
           data.spinnerLikes.length > 0;
         if (needsSpinner) {
           setPhase("spinning");

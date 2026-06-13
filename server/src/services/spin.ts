@@ -46,6 +46,12 @@ function effectiveTierForOutcome(tokenTier: RewardTier, outcome: SpinOutcome): R
   }
 }
 
+function shouldSpinForOutcome(tokenTier: RewardTier, outcome: SpinOutcome): boolean {
+  if (outcome === SpinOutcome.Win || outcome === SpinOutcome.LevelUp) return true;
+  // Step down spins one tier lower; Bronze has nowhere to go.
+  return outcome === SpinOutcome.LevelDown && tokenTier !== RewardTier.Bronze;
+}
+
 async function countClaimsInBucket(
   userId: string,
   tier: RewardTier,
@@ -58,7 +64,7 @@ async function countClaimsInBucket(
     where: {
       userId,
       effectiveTier: tier,
-      outcome: { in: [SpinOutcome.Win, SpinOutcome.LevelUp] },
+      outcome: { in: [SpinOutcome.Win, SpinOutcome.LevelUp, SpinOutcome.LevelDown] },
       createdAt: { gte: bucketStart },
     },
   });
@@ -127,9 +133,7 @@ export async function executeSpin(
     let outcome = rollOutcome();
     let effectiveTier = effectiveTierForOutcome(tokenTier, outcome);
 
-    const shouldPickPrize = outcome === SpinOutcome.Win || outcome === SpinOutcome.LevelUp;
-
-    if (shouldPickPrize) {
+    if (shouldSpinForOutcome(tokenTier, outcome)) {
       const effectiveClaims = await countClaimsInBucket(userId, effectiveTier, timeZone, tx);
       if (!canClaimTier(effectiveTier, effectiveClaims)) {
         outcome = SpinOutcome.NoReward;
@@ -141,8 +145,7 @@ export async function executeSpin(
     let spinnerRewards: SpinWheelSlice[] = [];
     let winningIndex = 0;
 
-    const pickPrize =
-      outcome === SpinOutcome.Win || outcome === SpinOutcome.LevelUp;
+    const pickPrize = shouldSpinForOutcome(tokenTier, outcome);
 
     if (pickPrize) {
       const pool = await tx.userReward.findMany({

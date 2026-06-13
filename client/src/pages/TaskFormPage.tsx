@@ -21,7 +21,10 @@ import {
   type TaskSection,
 } from "../domain/tasks";
 import { PageHeader } from "../components/PageHeader";
-import { TIERS, type RewardTier } from "../domain/tiers";
+import { RewardPicker, pickerToTaskFields, taskToPickerValue } from "../components/RewardPicker";
+import type { UserLike } from "../api/types";
+import type { MilestoneReward } from "../domain/rewards";
+import type { RewardTier } from "../domain/tiers";
 
 export function TaskFormPage({
   embedded = false,
@@ -45,7 +48,7 @@ export function TaskFormPage({
     "/";
 
   const [name, setName] = useState("");
-  const [tier, setTier] = useState<RewardTier>("Bronze");
+  const [taskReward, setTaskReward] = useState<MilestoneReward>({ kind: "token", tier: "Bronze" });
   const [section, setSection] = useState<TaskSection>("Could");
   const [persistAfterDone, setPersistAfterDone] = useState(true);
   const [error, setError] = useState("");
@@ -72,6 +75,12 @@ export function TaskFormPage({
     }
   }, [isNew, initialDate]);
 
+  const { data: likesData } = useQuery({
+    queryKey: ["likes"],
+    queryFn: () => api<{ likes: UserLike[] }>("/likes"),
+  });
+  const likes = likesData?.likes ?? [];
+
   const { data } = useQuery({
     queryKey: ["tasks"],
     queryFn: () => api<{ tasks: Task[] }>("/tasks"),
@@ -83,7 +92,7 @@ export function TaskFormPage({
       const task = data.tasks.find((t) => t.id === id);
       if (task) {
         setName(task.name);
-        setTier(task.tier);
+        setTaskReward(taskToPickerValue(task));
         setSection(normalizeSection(task.section));
         setPersistAfterDone(task.persistAfterDone);
 
@@ -141,6 +150,15 @@ export function TaskFormPage({
     if (recurrence === "Monthly" && daysOfMonth.length === 0) {
       return "Pick at least one day for monthly recurrence";
     }
+    if (taskReward.kind === "token" && !taskReward.tier) {
+      return "Token reward requires a tier";
+    }
+    if (taskReward.kind === "like" && !taskReward.likeId) {
+      return "Select a like for this reward";
+    }
+    if (taskReward.kind === "custom" && !taskReward.label.trim()) {
+      return "Custom reward requires a label";
+    }
     return null;
   }
 
@@ -150,9 +168,10 @@ export function TaskFormPage({
       if (validationError) throw new Error(validationError);
 
       const isRepeating = recurrence !== "None";
+      const rewardFields = pickerToTaskFields(taskReward);
       const body = {
         name,
-        tier,
+        ...rewardFields,
         section,
         persistAfterDone,
         scheduledAt: isRepeating
@@ -289,21 +308,12 @@ export function TaskFormPage({
           </div>
         </div>
 
-        <div className="form-field">
-          <label htmlFor="tier">Tier when achieved</label>
-          <select
-            id="tier"
-            className="neon-select"
-            value={tier}
-            onChange={(e) => setTier(e.target.value as RewardTier)}
-          >
-            {TIERS.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </div>
+        <RewardPicker
+          idPrefix="task-reward"
+          value={taskReward}
+          onChange={setTaskReward}
+          likes={likes}
+        />
 
         <fieldset className="schedule-fieldset">
           <label className="schedule-toggle">

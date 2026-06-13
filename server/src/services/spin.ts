@@ -97,7 +97,6 @@ export interface SpinResult {
   spinnerLikes: SpinWheelSlice[];
   winningIndex: number;
   tokenBalances: Record<RewardTier, number>;
-  newTokenFromLevelUp: boolean;
   scheduleBlocked?: boolean;
 }
 
@@ -141,7 +140,6 @@ export async function executeSpin(
     let reward: { id: string; label: string } | undefined;
     let spinnerRewards: SpinWheelSlice[] = [];
     let winningIndex = 0;
-    let newTokenFromLevelUp = false;
 
     const pickPrize =
       outcome === SpinOutcome.Win || outcome === SpinOutcome.LevelUp;
@@ -181,17 +179,6 @@ export async function executeSpin(
       }
     }
 
-    if (outcome === SpinOutcome.LevelUp) {
-      await tx.rewardToken.create({
-        data: {
-          userId,
-          tier: effectiveTier,
-          source: "spin_level_up",
-        },
-      });
-      newTokenFromLevelUp = true;
-    }
-
     await tx.spinLog.create({
       data: {
         userId,
@@ -208,7 +195,6 @@ export async function executeSpin(
       like: reward,
       spinnerLikes: spinnerRewards,
       winningIndex,
-      newTokenFromLevelUp,
     };
   });
 

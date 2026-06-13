@@ -1283,6 +1283,12 @@ h3,
   line-height: 1.4;
 }
 
+.reward-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
 .calendar-toolbar {
   display: flex;
   flex-direction: column;

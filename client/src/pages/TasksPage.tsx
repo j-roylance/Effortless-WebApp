@@ -7,9 +7,10 @@ import { PageHeader } from "../components/PageHeader";
 import { QueryErrorBanner } from "../components/QueryErrorBanner";
 import { TaskCard } from "../components/TaskCard";
 import { Toast } from "../components/Toast";
-import { TokenRewardModalHost } from "../components/TokenRewardModalHost";
+import { RewardModalHost } from "../components/RewardModalHost";
 import { useTokenRewardFromNavigation } from "../hooks/useTokenRewardFromNavigation";
-import { useTokenRewardQueue } from "../hooks/useTokenRewardQueue";
+import { useRewardQueue } from "../hooks/useRewardQueue";
+import { rewardsFromAchieve, rewardsFromPlanningClaim } from "../domain/achieve-rewards";
 import { isTaskPastDue } from "../domain/recurrence";
 import {
   TASK_SECTIONS,
@@ -66,10 +67,14 @@ export function TasksPage() {
   const location = useLocation();
   const [showTokens, setShowTokens] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const { current: tokenReward, enqueue: enqueueTokenReward, dismissCurrent: dismissTokenReward } =
-    useTokenRewardQueue();
+  const { current: reward, enqueue: enqueueReward, dismissCurrent: dismissReward } =
+    useRewardQueue();
 
-  useTokenRewardFromNavigation(enqueueTokenReward, location.pathname, setToast);
+  useTokenRewardFromNavigation(
+    (tiers) => enqueueReward(tiers.map((tier) => ({ type: "token", tier }))),
+    location.pathname,
+    setToast
+  );
 
   const { data: tasksData, isLoading, isError, refetch } = useQuery({
     queryKey: ["tasks"],
@@ -87,10 +92,7 @@ export function TasksPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
-      enqueueTokenReward([
-        data.token.tier,
-        ...(data.bonusTokens?.map((b) => b.tier) ?? []),
-      ]);
+      enqueueReward(rewardsFromAchieve(data));
     },
     onError: (err: Error) => setToast(err.message),
   });
@@ -182,7 +184,7 @@ export function TasksPage() {
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
-      <TokenRewardModalHost tier={tokenReward} onClose={dismissTokenReward} />
+      <RewardModalHost reward={reward} onClose={dismissReward} />
     </>
   );
 }

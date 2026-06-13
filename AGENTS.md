@@ -30,6 +30,7 @@ Grep hits for `habit` in old token `source` values are expected.
 | Shared page chrome | `client/src/components/PageHeader.tsx` |
 | Token earn modals | `useTokenRewardQueue`, `TokenRewardModalHost` |
 | Calendar / repeat overrides | `client/src/domain/calendar.ts`, `schedule-overrides.ts`, `PATCH /tasks/:id` with `occurrenceDayKey` |
+| Task / daily rewards | `rewardKind` on `Habit`, `planningReward` JSON on `DailySettings`, `client/src/components/RewardPicker.tsx` |
 | Schema | `server/prisma/schema.prisma` → `npx prisma migrate dev` |
 
 ## Routes (UI → page → API)

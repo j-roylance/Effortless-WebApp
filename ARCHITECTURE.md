@@ -83,9 +83,8 @@ Migrations live in `server/prisma/migrations/`.
 | `daily_planning` | Done planning today (calendar) |
 | `daily_all_musts` | All Must do-dates achieved today |
 | `daily_all_do_dates` | All do-date tasks achieved today |
-| `spin_level_up` | Level-up outcome on spin |
 
-Legacy rows may still use `habit_create` / `habit_achieve`.
+Legacy rows may still use `habit_create` / `habit_achieve` or historical `spin_level_up` token grants.
 
 ## Spin algorithm (authoritative on server)
 
@@ -93,7 +92,6 @@ Legacy rows may still use `habit_create` / `habit_achieve`.
 2. Spend oldest unspent token of that tier.
 3. Roll outcome: Win / LevelUp / NoReward / LevelDown (25% each).
 4. If Win or LevelUp: pick random like (`UserReward`) at effective tier; enforce cap on effective tier.
-5. LevelUp also mints one token at the higher tier.
 
 Client wheel only animates to the index the server returns.
 

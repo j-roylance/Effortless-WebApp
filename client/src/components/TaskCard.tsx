@@ -6,6 +6,7 @@ import {
   isTaskAchievedToday,
   recurrenceSummary,
 } from "../domain/recurrence";
+import { rewardSummary } from "../domain/rewards";
 import { TierBadge } from "./TierBadge";
 
 export function TaskCard({
@@ -21,13 +22,31 @@ export function TaskCard({
 }) {
   const repeatLabel = recurrenceSummary(task.recurrence, task.recurrenceConfig);
   const achievedToday = isTaskAchievedToday(task.achievedAt);
+  const rewardLabel = rewardSummary(
+    task.rewardKind,
+    task.tier,
+    task.rewardLikeLabel,
+    task.customRewardLabel
+  );
 
   return (
     <article className={`task-card neon-card${pastDue ? " task-card--past-due" : ""}`}>
       <div className="task-card-header">
         <div>
           <h4 style={{ margin: "0 0 0.35rem", fontSize: "1.1rem" }}>{task.name}</h4>
-          <TierBadge tier={task.tier} />
+          {task.rewardKind === "Token" && task.tier ? (
+            <TierBadge tier={task.tier} />
+          ) : (
+            <span
+              style={{
+                fontSize: "0.75rem",
+                color: "var(--text-dim)",
+                fontFamily: "var(--font-display)",
+              }}
+            >
+              {rewardLabel}
+            </span>
+          )}
           {!task.persistAfterDone && (
             <span
               style={{

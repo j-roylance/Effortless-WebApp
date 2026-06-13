@@ -1,4 +1,5 @@
 import type { RecurrenceConfig, TaskRecurrence } from "../domain/recurrence";
+import type { TaskRewardKind } from "../domain/rewards";
 import type { TaskSection } from "../domain/tasks";
 import type { RewardTier, SpinOutcome } from "../domain/tiers";
 
@@ -11,7 +12,11 @@ export interface User {
 export interface Task {
   id: string;
   name: string;
-  tier: RewardTier;
+  rewardKind: TaskRewardKind;
+  tier: RewardTier | null;
+  rewardLikeId: string | null;
+  customRewardLabel: string | null;
+  rewardLikeLabel?: string | null;
   section: TaskSection;
   scheduledAt: string | null;
   durationMinutes: number | null;
@@ -75,10 +80,17 @@ export interface BonusToken {
   source: string;
 }
 
+export interface BonusReward {
+  label: string;
+  source: string;
+}
+
 export interface AchieveResult {
   task: Task;
-  token: { id: string; tier: RewardTier };
+  token: { id: string; tier: RewardTier } | null;
+  definiteReward?: { label: string } | null;
   bonusTokens?: BonusToken[];
+  bonusRewards?: BonusReward[];
 }
 
 export interface SpinResult {
@@ -88,5 +100,4 @@ export interface SpinResult {
   spinnerLikes: SpinWheelSlice[];
   winningIndex: number;
   tokenBalances: Record<RewardTier, number>;
-  newTokenFromLevelUp: boolean;
 }

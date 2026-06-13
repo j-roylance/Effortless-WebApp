@@ -5,6 +5,12 @@ import {
   isSameDayInTimezone,
   type DailyBonusType,
 } from "../domain/daily.js";
+import {
+  NONE_MILESTONE_REWARD,
+  parseMilestoneReward,
+  type MilestoneReward,
+  type RewardGrant,
+} from "../domain/rewards.js";
 import { taskOccursOnDay } from "../domain/schedule-overrides.js";
 
 export interface BonusToken {
@@ -12,14 +18,37 @@ export interface BonusToken {
   source: string;
 }
 
+export interface BonusReward {
+  label: string;
+  source: string;
+}
+
+export interface ClaimResult {
+  token: BonusToken | null;
+  definiteReward: { label: string } | null;
+}
+
 type Tx = Prisma.TransactionClient;
 
-export async function getDailySettings(userId: string) {
+export interface DailySettingsRewards {
+  planningReward: MilestoneReward;
+  allMustsReward: MilestoneReward;
+  allDoDatesReward: MilestoneReward;
+}
+
+export async function getDailySettings(userId: string): Promise<DailySettingsRewards> {
   const row = await prisma.dailySettings.findUnique({ where: { userId } });
+  if (!row) {
+    return {
+      planningReward: NONE_MILESTONE_REWARD,
+      allMustsReward: NONE_MILESTONE_REWARD,
+      allDoDatesReward: NONE_MILESTONE_REWARD,
+    };
+  }
   return {
-    planningRewardTier: row?.planningRewardTier ?? null,
-    allMustsRewardTier: row?.allMustsRewardTier ?? null,
-    allDoDatesRewardTier: row?.allDoDatesRewardTier ?? null,
+    planningReward: parseMilestoneReward(row.planningReward),
+    allMustsReward: parseMilestoneReward(row.allMustsReward),
+    allDoDatesReward: parseMilestoneReward(row.allDoDatesReward),
   };
 }
 
@@ -64,21 +93,66 @@ export function allDoDatesCompleteForDay(
   return doToday.every((t) => achievedIds.has(t.id));
 }
 
+async function resolveMilestoneGrant(
+  tx: Tx,
+  userId: string,
+  reward: MilestoneReward
+): Promise<RewardGrant & { likeLabel?: string }> {
+  if (reward.kind === "none") return { type: "none" };
+  if (reward.kind === "token") return { type: "token", tier: reward.tier };
+  if (reward.kind === "custom") return { type: "definite", label: reward.label };
+  const like = await tx.userReward.findFirst({
+    where: { id: reward.likeId, userId },
+    select: { label: true },
+  });
+  if (!like) return { type: "none" };
+  return { type: "definite", label: like.label, likeLabel: like.label };
+}
+
 async function claimBonus(
   tx: Tx,
   userId: string,
   dayKey: string,
   bonusType: DailyBonusType,
-  tier: RewardTier
-): Promise<BonusToken | null> {
+  reward: MilestoneReward
+): Promise<ClaimResult | null> {
   const existing = await tx.dailyBonusClaim.findUnique({
     where: { userId_dayKey_bonusType: { userId, dayKey, bonusType } },
   });
   if (existing) return null;
 
+  const grant = await resolveMilestoneGrant(tx, userId, reward);
+  if (grant.type === "none") return null;
+
+  const source = `daily_${bonusType}`;
+
+  if (grant.type === "token") {
+    try {
+      await tx.dailyBonusClaim.create({
+        data: { userId, dayKey, bonusType, tier: grant.tier },
+      });
+    } catch (e) {
+      const err = e as { code?: string };
+      if (err.code === "P2002") return null;
+      throw e;
+    }
+
+    await tx.rewardToken.create({
+      data: { userId, tier: grant.tier, source },
+    });
+
+    return { token: { tier: grant.tier, source }, definiteReward: null };
+  }
+
   try {
     await tx.dailyBonusClaim.create({
-      data: { userId, dayKey, bonusType, tier },
+      data: {
+        userId,
+        dayKey,
+        bonusType,
+        tier: null,
+        rewardLabel: grant.label,
+      },
     });
   } catch (e) {
     const err = e as { code?: string };
@@ -86,28 +160,23 @@ async function claimBonus(
     throw e;
   }
 
-  await tx.rewardToken.create({
-    data: {
-      userId,
-      tier,
-      source: `daily_${bonusType}`,
-    },
-  });
-
-  return { tier, source: `daily_${bonusType}` };
+  return {
+    token: null,
+    definiteReward: { label: grant.label },
+  };
 }
 
 export async function claimPlanningBonus(
   userId: string,
   timeZone: string,
   dayKey?: string
-): Promise<BonusToken | null> {
+): Promise<ClaimResult | null> {
   const key = dayKey ?? dayKeyForTimezone(timeZone);
   const settings = await getDailySettings(userId);
-  if (!settings.planningRewardTier) return null;
+  if (settings.planningReward.kind === "none") return null;
 
   return prisma.$transaction((tx) =>
-    claimBonus(tx, userId, key, "planning", settings.planningRewardTier!)
+    claimBonus(tx, userId, key, "planning", settings.planningReward)
   );
 }
 
@@ -121,12 +190,17 @@ function applyScheduleSnapshots(tasks: Habit[], snapshots: ScheduleSnapshot[]): 
   );
 }
 
+export interface AchievementBonusResult {
+  bonusTokens: BonusToken[];
+  bonusRewards: BonusReward[];
+}
+
 export async function evaluateAchievementBonuses(
   userId: string,
   timeZone: string,
   dayKey?: string,
   scheduleSnapshots: ScheduleSnapshot[] = []
-): Promise<BonusToken[]> {
+): Promise<AchievementBonusResult> {
   const key = dayKey ?? dayKeyForTimezone(timeZone);
   const settings = await getDailySettings(userId);
 
@@ -135,37 +209,44 @@ export async function evaluateAchievementBonuses(
     scheduleSnapshots
   );
 
-  const bonuses: BonusToken[] = [];
+  const bonusTokens: BonusToken[] = [];
+  const bonusRewards: BonusReward[] = [];
 
   await prisma.$transaction(async (tx) => {
     if (
-      settings.allMustsRewardTier &&
+      settings.allMustsReward.kind !== "none" &&
       allMustsCompleteForDay(tasks, key, timeZone)
     ) {
-      const token = await claimBonus(
-        tx,
-        userId,
-        key,
-        "all_musts",
-        settings.allMustsRewardTier
-      );
-      if (token) bonuses.push(token);
+      const result = await claimBonus(tx, userId, key, "all_musts", settings.allMustsReward);
+      if (result?.token) bonusTokens.push(result.token);
+      if (result?.definiteReward) {
+        bonusRewards.push({
+          label: result.definiteReward.label,
+          source: "daily_all_musts",
+        });
+      }
     }
 
     if (
-      settings.allDoDatesRewardTier &&
+      settings.allDoDatesReward.kind !== "none" &&
       allDoDatesCompleteForDay(tasks, key, timeZone)
     ) {
-      const token = await claimBonus(
+      const result = await claimBonus(
         tx,
         userId,
         key,
         "all_do_dates",
-        settings.allDoDatesRewardTier
+        settings.allDoDatesReward
       );
-      if (token) bonuses.push(token);
+      if (result?.token) bonusTokens.push(result.token);
+      if (result?.definiteReward) {
+        bonusRewards.push({
+          label: result.definiteReward.label,
+          source: "daily_all_do_dates",
+        });
+      }
     }
   });
 
-  return bonuses;
+  return { bonusTokens, bonusRewards };
 }

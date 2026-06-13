@@ -6,9 +6,10 @@ import type { AchieveResult, BonusToken, Task } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { QueryErrorBanner } from "../components/QueryErrorBanner";
 import { Toast } from "../components/Toast";
-import { TokenRewardModalHost } from "../components/TokenRewardModalHost";
+import { RewardModalHost } from "../components/RewardModalHost";
 import { useTokenRewardFromNavigation } from "../hooks/useTokenRewardFromNavigation";
-import { useTokenRewardQueue } from "../hooks/useTokenRewardQueue";
+import { useRewardQueue } from "../hooks/useRewardQueue";
+import { rewardsFromAchieve, rewardsFromPlanningClaim } from "../domain/achieve-rewards";
 import { useAuth } from "../context/AuthContext";
 import { TaskFormPage } from "./TaskFormPage";
 import {
@@ -42,13 +43,17 @@ export function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState(todayDateInput());
   const [showNewTask, setShowNewTask] = useState(false);
   const [planningTick, setPlanningTick] = useState(0);
-  const { current: tokenReward, enqueue: enqueueTokenReward, dismissCurrent: dismissTokenReward } =
-    useTokenRewardQueue();
+  const { current: reward, enqueue: enqueueReward, dismissCurrent: dismissReward } =
+    useRewardQueue();
   const [dragging, setDragging] = useState<CalendarEntry | null>(null);
   const [dragMinutes, setDragMinutes] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  useTokenRewardFromNavigation(enqueueTokenReward, "/calendar", setToast);
+  useTokenRewardFromNavigation(
+    (tiers) => enqueueReward(tiers.map((tier) => ({ type: "token", tier }))),
+    "/calendar",
+    setToast
+  );
 
   const { data: tasksData, isLoading, isError, refetch } = useQuery({
     queryKey: ["tasks"],
@@ -118,25 +123,23 @@ export function CalendarPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
-      enqueueTokenReward([
-        data.token.tier,
-        ...(data.bonusTokens?.map((b) => b.tier) ?? []),
-      ]);
+      enqueueReward(rewardsFromAchieve(data));
     },
     onError: (err: Error) => setToast(err.message),
   });
 
   const planningMutation = useMutation({
     mutationFn: () =>
-      api<{ token: BonusToken | null }>("/daily-settings/claim-planning", {
-        method: "POST",
-      }),
+      api<{ token: BonusToken | null; definiteReward: { label: string } | null }>(
+        "/daily-settings/claim-planning",
+        { method: "POST" }
+      ),
     onSuccess: (data) => {
       if (!user?.id) return;
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
       setPlanningDone(user.id, todayDateInput());
       setPlanningTick((t) => t + 1);
-      if (data.token?.tier) enqueueTokenReward([data.token.tier]);
+      enqueueReward(rewardsFromPlanningClaim(data));
     },
     onError: (err: Error) => setToast(err.message),
   });
@@ -381,7 +384,7 @@ export function CalendarPage() {
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
-      <TokenRewardModalHost tier={tokenReward} onClose={dismissTokenReward} />
+      <RewardModalHost reward={reward} onClose={dismissReward} />
     </>
   );
 }

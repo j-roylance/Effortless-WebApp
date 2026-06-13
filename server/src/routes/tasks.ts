@@ -1,4 +1,4 @@
-import { Prisma, RewardTier, TaskRecurrence, TaskSection } from "@prisma/client";
+import { Prisma, RewardTier, TaskRecurrence, TaskRewardKind, TaskSection } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
@@ -16,6 +16,13 @@ import {
   parseScheduleOverrides,
   taskOccursOnDay,
 } from "../domain/schedule-overrides.js";
+import {
+  normalizeTaskRewardInput,
+  resolveTaskRewardGrant,
+  taskRewardStorageFields,
+  validateTaskRewardFields,
+  validateTaskRewardLike,
+} from "../domain/rewards.js";
 import { dayKeyForTimezone, isSameDayInTimezone, safeTimeZone } from "../domain/daily.js";
 import { evaluateAchievementBonuses } from "../services/daily-rewards.js";
 
@@ -28,9 +35,18 @@ const recurrenceConfigSchema = z.object({
   daysOfMonth: z.array(z.number().int().min(1).max(31)).optional(),
 });
 
+const optionalTierSchema = z
+  .string()
+  .refine(isValidTier, { message: "Invalid tier" })
+  .nullable()
+  .optional();
+
 const taskBodySchema = z.object({
   name: z.string().min(1).max(200),
-  tier: z.string().refine(isValidTier, { message: "Invalid tier" }),
+  rewardKind: z.nativeEnum(TaskRewardKind).optional(),
+  tier: optionalTierSchema,
+  rewardLikeId: z.string().nullable().optional(),
+  customRewardLabel: z.string().max(200).nullable().optional(),
   section: z
     .string()
     .refine(isValidSection, { message: "Invalid section" })
@@ -128,6 +144,11 @@ function serializeTask(row: {
   recurrence: TaskRecurrence;
   recurrenceConfig: unknown;
   scheduleOverrides?: unknown;
+  rewardKind: TaskRewardKind;
+  tier: RewardTier | null;
+  rewardLikeId: string | null;
+  customRewardLabel: string | null;
+  rewardLike?: { label: string } | null;
   [key: string]: unknown;
 }) {
   return {
@@ -135,12 +156,59 @@ function serializeTask(row: {
     section: normalizeSection(row.section),
     recurrenceConfig: parseRecurrenceConfig(row.recurrenceConfig),
     scheduleOverrides: parseScheduleOverrides(row.scheduleOverrides),
+    rewardLikeLabel: row.rewardLike?.label ?? null,
+    rewardLike: undefined,
   };
+}
+
+async function resolveTaskRewardFromBody(
+  userId: string,
+  body: {
+    rewardKind?: TaskRewardKind;
+    tier?: RewardTier | null;
+    rewardLikeId?: string | null;
+    customRewardLabel?: string | null;
+  },
+  existing?: {
+    rewardKind: TaskRewardKind;
+    tier: RewardTier | null;
+    rewardLikeId: string | null;
+    customRewardLabel: string | null;
+  }
+) {
+  const reward = normalizeTaskRewardInput({
+    rewardKind: body.rewardKind ?? existing?.rewardKind ?? TaskRewardKind.Token,
+    tier:
+      body.tier !== undefined
+        ? body.tier
+        : existing?.tier ?? RewardTier.Bronze,
+    rewardLikeId:
+      body.rewardLikeId !== undefined
+        ? body.rewardLikeId
+        : existing?.rewardLikeId ?? null,
+    customRewardLabel:
+      body.customRewardLabel !== undefined
+        ? body.customRewardLabel
+        : existing?.customRewardLabel ?? null,
+  });
+
+  const validationError = validateTaskRewardFields(reward);
+  if (validationError) throw new Error(validationError);
+
+  if (reward.rewardKind === TaskRewardKind.Like && reward.rewardLikeId) {
+    const likeError = await validateTaskRewardLike(userId, reward.rewardLikeId, (id) =>
+      prisma.userReward.findFirst({ where: { id }, select: { userId: true } })
+    );
+    if (likeError) throw new Error(likeError);
+  }
+
+  return taskRewardStorageFields(reward);
 }
 
 tasksRouter.get("/", async (req: AuthedRequest, res) => {
   const rows = await prisma.habit.findMany({
     where: { userId: req.user!.userId, archivedAt: null },
+    include: { rewardLike: { select: { label: true } } },
     orderBy: [{ section: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
   });
   res.json({ tasks: rows.map(serializeTask) });
@@ -152,6 +220,7 @@ tasksRouter.post("/", async (req: AuthedRequest, res) => {
     const body = taskBodySchema.parse(req.body);
     const section = normalizeSection(body.section);
     const schedule = resolveScheduleFields(body);
+    const rewardFields = await resolveTaskRewardFromBody(req.user!.userId, body);
 
     const result = await prisma.$transaction(async (tx) => {
       const sortOrder = await nextSortOrder(req.user!.userId, section);
@@ -159,8 +228,8 @@ tasksRouter.post("/", async (req: AuthedRequest, res) => {
         data: {
           userId: req.user!.userId,
           name: body.name.trim(),
-          tier: body.tier,
           section,
+          ...rewardFields,
           scheduledAt: schedule.scheduledAt,
           durationMinutes: schedule.durationMinutes,
           dueAt: schedule.dueAt,
@@ -169,6 +238,7 @@ tasksRouter.post("/", async (req: AuthedRequest, res) => {
           persistAfterDone: body.persistAfterDone ?? true,
           sortOrder,
         },
+        include: { rewardLike: { select: { label: true } } },
       });
 
       const token = await tx.rewardToken.create({
@@ -232,6 +302,7 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
       const task = await prisma.habit.update({
         where: { id: existing.id },
         data: { scheduleOverrides: toJsonOverrides(scheduleOverrides) },
+        include: { rewardLike: { select: { label: true } } },
       });
       res.json({ task: serializeTask(task) });
       return;
@@ -247,6 +318,17 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
       body.dueAt !== undefined ||
       body.recurrence !== undefined ||
       body.recurrenceConfig !== undefined;
+
+    const rewardTouched =
+      body.rewardKind !== undefined ||
+      body.tier !== undefined ||
+      body.rewardLikeId !== undefined ||
+      body.customRewardLabel !== undefined;
+
+    let rewardFields: Awaited<ReturnType<typeof resolveTaskRewardFromBody>> | null = null;
+    if (rewardTouched) {
+      rewardFields = await resolveTaskRewardFromBody(req.user!.userId, body, existing);
+    }
 
     let scheduleUpdate: ReturnType<typeof resolveScheduleFields> | null = null;
     if (scheduleTouched) {
@@ -284,7 +366,7 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
       where: { id: existing.id },
       data: {
         ...(body.name !== undefined && { name: body.name.trim() }),
-        ...(body.tier !== undefined && { tier: body.tier }),
+        ...(rewardFields && rewardFields),
         ...(body.section !== undefined && { section: nextSection }),
         ...(sectionChanged && {
           sortOrder: await nextSortOrder(req.user!.userId, nextSection),
@@ -303,6 +385,7 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
           persistAfterDone: body.persistAfterDone,
         }),
       },
+      include: { rewardLike: { select: { label: true } } },
     });
     res.json({ task: serializeTask(task) });
   } catch (e) {
@@ -329,6 +412,7 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
   const taskId = String(req.params.id);
   const task = await prisma.habit.findFirst({
     where: { id: taskId, userId: req.user!.userId, archivedAt: null },
+    include: { rewardLike: { select: { label: true } } },
   });
   if (!task) {
     res.status(404).json({ error: "Not found" });
@@ -357,14 +441,29 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
         )
       : { scheduledAt: task.scheduledAt, dueAt: task.dueAt };
 
+  const grant = resolveTaskRewardGrant(
+    task.rewardKind,
+    task.tier,
+    task.rewardLike?.label ?? null,
+    task.customRewardLabel
+  );
+
   const result = await prisma.$transaction(async (tx) => {
-    const token = await tx.rewardToken.create({
-      data: {
-        userId: req.user!.userId,
-        tier: task.tier,
-        source: "task_achieve",
-      },
-    });
+    let token: { id: string; tier: RewardTier } | null = null;
+    let definiteReward: { label: string } | null = null;
+
+    if (grant.type === "token") {
+      const created = await tx.rewardToken.create({
+        data: {
+          userId: req.user!.userId,
+          tier: grant.tier,
+          source: "task_achieve",
+        },
+      });
+      token = { id: created.id, tier: created.tier };
+    } else if (grant.type === "definite") {
+      definiteReward = { label: grant.label };
+    }
 
     const updated = await tx.habit.update({
       where: { id: task.id },
@@ -374,12 +473,13 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
         dueAt: advanced.dueAt,
         ...(!task.persistAfterDone && { archivedAt: now }),
       },
+      include: { rewardLike: { select: { label: true } } },
     });
 
-    return { token, task: updated };
+    return { token, definiteReward, task: updated };
   });
 
-  const bonusTokens = await evaluateAchievementBonuses(
+  const { bonusTokens, bonusRewards } = await evaluateAchievementBonuses(
     req.user!.userId,
     timeZone,
     todayKey,
@@ -388,7 +488,9 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
 
   res.json({
     task: serializeTask(result.task),
-    token: { id: result.token.id, tier: result.token.tier },
+    token: result.token,
+    definiteReward: result.definiteReward,
     bonusTokens,
+    bonusRewards,
   });
 });

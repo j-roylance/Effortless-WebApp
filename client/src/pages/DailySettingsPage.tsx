@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
+import type { UserLike } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { QueryErrorBanner } from "../components/QueryErrorBanner";
+import { RewardPicker } from "../components/RewardPicker";
 import { Toast } from "../components/Toast";
 import {
-  OPTIONAL_TIER_OPTIONS,
+  DEFAULT_DAILY_SETTINGS,
   type DailySettings,
-  type OptionalRewardTier,
 } from "../domain/daily";
-import { TIER_COLORS } from "../domain/tiers";
+import type { MilestoneReward } from "../domain/rewards";
 
 const FIELDS: {
   key: keyof DailySettings;
@@ -17,17 +18,17 @@ const FIELDS: {
   description: string;
 }[] = [
   {
-    key: "planningRewardTier",
+    key: "planningReward",
     label: "Planning the day",
     description: "Reward when you press Done planning today on the calendar.",
   },
   {
-    key: "allMustsRewardTier",
+    key: "allMustsReward",
     label: "All Must tasks done",
     description: "Reward when every Must task with a do date today is achieved.",
   },
   {
-    key: "allDoDatesRewardTier",
+    key: "allDoDatesReward",
     label: "All do-date tasks done",
     description: "Reward when every task with a do date today is achieved.",
   },
@@ -35,11 +36,7 @@ const FIELDS: {
 
 export function DailySettingsPage() {
   const queryClient = useQueryClient();
-  const [settings, setSettings] = useState<DailySettings>({
-    planningRewardTier: "None",
-    allMustsRewardTier: "None",
-    allDoDatesRewardTier: "None",
-  });
+  const [settings, setSettings] = useState<DailySettings>(DEFAULT_DAILY_SETTINGS);
   const [saved, setSaved] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -47,6 +44,12 @@ export function DailySettingsPage() {
     queryKey: ["daily-settings"],
     queryFn: () => api<DailySettings>("/daily-settings"),
   });
+
+  const { data: likesData } = useQuery({
+    queryKey: ["likes"],
+    queryFn: () => api<{ likes: UserLike[] }>("/likes"),
+  });
+  const likes = likesData?.likes ?? [];
 
   useEffect(() => {
     if (data) setSettings(data);
@@ -67,8 +70,33 @@ export function DailySettingsPage() {
     onError: (err: Error) => setToast(err.message),
   });
 
-  function updateField(key: keyof DailySettings, value: OptionalRewardTier) {
+  function updateField(key: keyof DailySettings, value: MilestoneReward) {
     setSettings((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function validate(): string | null {
+    for (const field of FIELDS) {
+      const reward = settings[field.key];
+      if (reward.kind === "token" && !reward.tier) {
+        return `${field.label} requires a token tier`;
+      }
+      if (reward.kind === "like" && !reward.likeId) {
+        return `${field.label} requires selecting a like`;
+      }
+      if (reward.kind === "custom" && !reward.label.trim()) {
+        return `${field.label} requires a custom reward label`;
+      }
+    }
+    return null;
+  }
+
+  function handleSave() {
+    const err = validate();
+    if (err) {
+      setToast(err);
+      return;
+    }
+    saveMutation.mutate();
   }
 
   return (
@@ -76,7 +104,8 @@ export function DailySettingsPage() {
       <PageHeader title="Daily Settings" />
 
       <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", marginTop: 0 }}>
-        Choose bonus reward tokens for daily milestones. Select None to disable a reward.
+        Choose rewards for daily milestones: no reward, a spin token, a specific like, or
+        custom text.
       </p>
 
       {isLoading && <p className="empty-state">Loading settings…</p>}
@@ -90,25 +119,12 @@ export function DailySettingsPage() {
           <section key={field.key} className="daily-settings-card neon-card">
             <h3 className="daily-settings-label">{field.label}</h3>
             <p className="daily-settings-desc">{field.description}</p>
-            <select
-              className="neon-select"
+            <RewardPicker
+              idPrefix={field.key}
               value={settings[field.key]}
-              onChange={(e) =>
-                updateField(field.key, e.target.value as OptionalRewardTier)
-              }
-              style={{
-                borderColor:
-                  settings[field.key] === "None"
-                    ? undefined
-                    : TIER_COLORS[settings[field.key] as keyof typeof TIER_COLORS],
-              }}
-            >
-              {OPTIONAL_TIER_OPTIONS.map((tier) => (
-                <option key={tier} value={tier}>
-                  {tier === "None" ? "None" : tier}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => updateField(field.key, value)}
+              likes={likes}
+            />
           </section>
         ))}
       </div>
@@ -118,7 +134,7 @@ export function DailySettingsPage() {
         className="neon-btn neon-btn-primary"
         style={{ width: "100%", marginTop: "0.5rem" }}
         disabled={saveMutation.isPending}
-        onClick={() => saveMutation.mutate()}
+        onClick={handleSave}
       >
         {saveMutation.isPending ? "Saving…" : saved ? "Saved!" : "Save settings"}
       </button>

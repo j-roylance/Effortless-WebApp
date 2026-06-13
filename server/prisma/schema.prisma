@@ -45,6 +45,13 @@ enum TaskRecurrence {
   Monthly
 }
 
+enum TaskRewardKind {
+  None
+  Token
+  Like
+  Custom
+}
+
 model User {
   id           String        @id @default(cuid())
   email        String        @unique
@@ -63,10 +70,13 @@ model User {
 }
 
 model Habit {
-  id               String      @id @default(cuid())
+  id               String         @id @default(cuid())
   userId           String
   name             String
-  tier             RewardTier
+  rewardKind       TaskRewardKind @default(Token)
+  tier             RewardTier?
+  rewardLikeId     String?
+  customRewardLabel String?
   section          TaskSection    @default(Could)
   scheduledAt      DateTime?
   durationMinutes  Int?
@@ -80,8 +90,10 @@ model Habit {
   archivedAt       DateTime?
   createdAt        DateTime   @default(now())
   user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rewardLike       UserReward? @relation(fields: [rewardLikeId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([rewardLikeId])
 }
 
 model UserReward {
@@ -91,6 +103,7 @@ model UserReward {
   label     String
   createdAt DateTime   @default(now())
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habits    Habit[]
 
   @@index([userId, tier])
 }
@@ -109,22 +122,23 @@ model RewardToken {
 }
 
 model DailySettings {
-  userId               String      @id
-  planningRewardTier   RewardTier?
-  allMustsRewardTier   RewardTier?
-  allDoDatesRewardTier RewardTier?
-  updatedAt            DateTime    @updatedAt
-  user                 User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String   @id
+  planningReward  Json     @default("{\"kind\":\"none\"}")
+  allMustsReward  Json     @default("{\"kind\":\"none\"}")
+  allDoDatesReward Json    @default("{\"kind\":\"none\"}")
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model DailyBonusClaim {
-  id        String     @id @default(cuid())
-  userId    String
-  dayKey    String
-  bonusType String
-  tier      RewardTier
-  createdAt DateTime   @default(now())
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String      @id @default(cuid())
+  userId      String
+  dayKey      String
+  bonusType   String
+  tier        RewardTier?
+  rewardLabel String?
+  createdAt   DateTime    @default(now())
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, dayKey, bonusType])
   @@index([userId, dayKey])

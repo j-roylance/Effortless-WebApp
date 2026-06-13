@@ -16,14 +16,12 @@ import {
   entriesForDay,
   formatHourLabel,
   isPlanningDone,
-  isSameLocalDay,
   minutesFromPointerY,
   dateTimeFromMinutes,
   setPlanningDone,
   todayDateInput,
   type CalendarEntry,
 } from "../domain/calendar";
-import { resolveOccurrenceForDay } from "../domain/schedule-overrides";
 import { isTaskAchievedToday, toLocalDateInput } from "../domain/recurrence";
 import { TASK_SECTION_COLOR, normalizeSection } from "../domain/tasks";
 
@@ -88,28 +86,11 @@ export function CalendarPage() {
       const dayKey = entry.occurrenceDayKey ?? selectedDate;
 
       if (entry.isRecurringInstance) {
-        if (entry.type === "do") {
-          const occurrence = resolveOccurrenceForDay(task, dayKey);
-          let dueAt: string | null | undefined = occurrence?.dueAt ?? undefined;
-          if (occurrence?.dueAt && isSameLocalDay(occurrence.dueAt, dayKey)) {
-            const delta =
-              new Date(iso).getTime() - new Date(occurrence.scheduledAt).getTime();
-            dueAt = new Date(new Date(occurrence.dueAt).getTime() + delta).toISOString();
-          }
-          return api(`/tasks/${task.id}`, {
-            method: "PATCH",
-            body: JSON.stringify({
-              occurrenceDayKey: dayKey,
-              scheduledAt: iso,
-              dueAt,
-            }),
-          });
-        }
         return api(`/tasks/${task.id}`, {
           method: "PATCH",
           body: JSON.stringify({
             occurrenceDayKey: dayKey,
-            dueAt: iso,
+            scheduledAt: iso,
           }),
         });
       }

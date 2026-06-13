@@ -459,7 +459,7 @@ export function TaskFormPage({
                 onChange={(e) => setDurationMinutes(e.target.value)}
               />
               <p className="schedule-hint">
-                Due time on the calendar is do time plus this length.
+                Optional estimate of how long the task takes (shown on the task card).
               </p>
             </div>
           )}

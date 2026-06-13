@@ -105,18 +105,6 @@ export function entriesForDay(tasks: Task[], dateInput: string): CalendarEntry[]
           true
         );
       }
-
-      if (occurrence.dueAt && isSameLocalDay(occurrence.dueAt, dateInput)) {
-        pushEntry(
-          entries,
-          task,
-          dateInput,
-          "due",
-          occurrence.dueAt,
-          CALENDAR_DEFAULT_DUE_MINUTES,
-          true
-        );
-      }
       continue;
     }
 

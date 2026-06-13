@@ -92,20 +92,10 @@ export function occursOnDay(
   return false;
 }
 
-function dueOffsetMs(task: OccurrenceTaskFields): number | null {
-  if (task.scheduledAt && task.dueAt) {
-    return task.dueAt.getTime() - task.scheduledAt.getTime();
-  }
-  if (task.durationMinutes) {
-    return task.durationMinutes * 60_000;
-  }
-  return null;
-}
-
 export function defaultOccurrenceForDay(
   task: OccurrenceTaskFields,
   dayKey: string
-): { scheduledAt: Date; dueAt: Date | null } | null {
+): { scheduledAt: Date; dueAt: null } | null {
   const config = parseRecurrenceConfig(task.recurrenceConfig);
   if (!occursOnDay(task.recurrence, config, dayKey) || !config?.time) return null;
 
@@ -113,40 +103,21 @@ export function defaultOccurrenceForDay(
   if (dayKey < anchorKey) return null;
 
   const scheduledAt = atLocalTimeOnDay(dayKey, config.time);
-  const offset = dueOffsetMs(task);
-  const dueAt = offset !== null ? new Date(scheduledAt.getTime() + offset) : null;
-
-  return { scheduledAt, dueAt };
+  return { scheduledAt, dueAt: null };
 }
 
 export function resolveOccurrenceForDay(
   task: OccurrenceTaskFields,
   dayKey: string
-): { scheduledAt: Date; dueAt: Date | null } | null {
+): { scheduledAt: Date; dueAt: null } | null {
   const defaults = defaultOccurrenceForDay(task, dayKey);
   if (!defaults) return null;
 
   const overrides = parseScheduleOverrides(task.scheduleOverrides);
   const override = overrides?.[dayKey];
-  if (!override) return defaults;
+  if (!override?.scheduledAt) return defaults;
 
-  const scheduledAt = override.scheduledAt
-    ? new Date(override.scheduledAt)
-    : defaults.scheduledAt;
-
-  let dueAt: Date | null;
-  if (override.dueAt === null) {
-    dueAt = null;
-  } else if (override.dueAt) {
-    dueAt = new Date(override.dueAt);
-  } else if (override.scheduledAt && defaults.dueAt) {
-    const offset = defaults.dueAt.getTime() - defaults.scheduledAt.getTime();
-    dueAt = new Date(scheduledAt.getTime() + offset);
-  } else {
-    dueAt = defaults.dueAt;
-  }
-
-  return { scheduledAt, dueAt };
+  return { scheduledAt: new Date(override.scheduledAt), dueAt: null };
 }
 
 export function overrideMatchesDefault(
@@ -160,17 +131,9 @@ export function overrideMatchesDefault(
   const scheduledAt = override.scheduledAt
     ? new Date(override.scheduledAt)
     : defaults.scheduledAt;
-  const dueAt =
-    override.dueAt === null
-      ? null
-      : override.dueAt
-        ? new Date(override.dueAt)
-        : defaults.dueAt;
 
   if (scheduledAt.getTime() !== defaults.scheduledAt.getTime()) return false;
-  if (dueAt === null && defaults.dueAt === null) return true;
-  if (dueAt && defaults.dueAt) return dueAt.getTime() === defaults.dueAt.getTime();
-  return false;
+  return true;
 }
 
 export function taskOccursOnDay(

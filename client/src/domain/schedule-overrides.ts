@@ -1,5 +1,5 @@
 import type { Task } from "../api/types";
-import { parseRecurrenceConfig, toLocalDateInput, type RecurrenceConfig, type TaskRecurrence } from "./recurrence";
+import { toLocalDateInput, type RecurrenceConfig, type TaskRecurrence } from "./recurrence";
 
 export interface ScheduleOverride {
   scheduledAt?: string;
@@ -65,20 +65,10 @@ export function occursOnDay(
   return false;
 }
 
-function dueOffsetMs(task: Task): number | null {
-  if (task.scheduledAt && task.dueAt) {
-    return new Date(task.dueAt).getTime() - new Date(task.scheduledAt).getTime();
-  }
-  if (task.durationMinutes) {
-    return task.durationMinutes * 60_000;
-  }
-  return null;
-}
-
 export function defaultOccurrenceForDay(
   task: Task,
   dayKey: string
-): { scheduledAt: string; dueAt: string | null } | null {
+): { scheduledAt: string; dueAt: null } | null {
   const config = task.recurrenceConfig;
   if (!occursOnDay(task.recurrence, config, dayKey) || !config?.time) return null;
 
@@ -86,39 +76,20 @@ export function defaultOccurrenceForDay(
   if (!anchorKey || dayKey < anchorKey) return null;
 
   const scheduledAt = atLocalTimeOnDay(dayKey, config.time).toISOString();
-  const offset = dueOffsetMs(task);
-  const dueAt = offset !== null ? new Date(new Date(scheduledAt).getTime() + offset).toISOString() : null;
-
-  return { scheduledAt, dueAt };
+  return { scheduledAt, dueAt: null };
 }
 
 export function resolveOccurrenceForDay(
   task: Task,
   dayKey: string
-): { scheduledAt: string; dueAt: string | null } | null {
+): { scheduledAt: string; dueAt: null } | null {
   const defaults = defaultOccurrenceForDay(task, dayKey);
   if (!defaults) return null;
 
-  const overrides = task.scheduleOverrides;
-  const override = overrides?.[dayKey];
-  if (!override) return defaults;
+  const override = task.scheduleOverrides?.[dayKey];
+  if (!override?.scheduledAt) return defaults;
 
-  const scheduledAt = override.scheduledAt ?? defaults.scheduledAt;
-
-  let dueAt: string | null;
-  if (override.dueAt === null) {
-    dueAt = null;
-  } else if (override.dueAt) {
-    dueAt = override.dueAt;
-  } else if (override.scheduledAt && defaults.dueAt) {
-    const offset =
-      new Date(defaults.dueAt).getTime() - new Date(defaults.scheduledAt).getTime();
-    dueAt = new Date(new Date(scheduledAt).getTime() + offset).toISOString();
-  } else {
-    dueAt = defaults.dueAt;
-  }
-
-  return { scheduledAt, dueAt };
+  return { scheduledAt: override.scheduledAt, dueAt: null };
 }
 
 export function taskOccursOnDay(task: Task, dayKey: string): boolean {

@@ -61,10 +61,22 @@ Grep hits for `habit` in old token `source` values are expected.
 
 Root is `.` on Vercel; `vercel.json` builds `server` then `client`. API handler is `api/index.ts` importing `server/dist/app.js` — run `npm run build` in `server/` before relying on compiled output locally.
 
+### Safe DB migration checklist
+
+When `schema.prisma` changes:
+
+1. Prefer additive migrations (`ADD COLUMN`, nullable, default null) — existing rows stay valid.
+2. From `server/`: `npx prisma migrate deploy` against the target database.
+3. Spot-check: row counts unchanged; new columns null on existing rows.
+4. Push to `main` so Vercel build matches the applied schema.
+
+Code-only changes skip step 2–3; push alone triggers redeploy.
+
 ## Common pitfalls
 
 - Vercel project root must be repo root, not `client/`
 - `JWT_SECRET` and `CLIENT_URL` required in production
 - Supabase: `DATABASE_URL` = pooler :6543, `DIRECT_URL` = session :5432
 - Client sends `X-Timezone` header (`api/client.ts`) for spin schedule and daily bonuses
-- Repeating tasks: series rule in `recurrence` + `recurrenceConfig`; per-day drag overrides in `scheduleOverrides`; calendar PATCH uses `occurrenceDayKey` (YYYY-MM-DD)
+- Repeating tasks: series rule in `recurrence` + `recurrenceConfig`; per-day drag overrides in `scheduleOverrides`; calendar shows Do blocks only (no Due); calendar PATCH uses `occurrenceDayKey` (YYYY-MM-DD)
+- Due dates are manual only (one-time tasks): server never derives `dueAt` from `durationMinutes`

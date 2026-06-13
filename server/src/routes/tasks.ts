@@ -106,10 +106,6 @@ function resolveScheduleFields(body: ScheduleInput) {
     if (!scheduledAt && next) scheduledAt = next;
   }
 
-  if (!dueAt && scheduledAt && durationMinutes) {
-    dueAt = new Date(scheduledAt.getTime() + durationMinutes * 60_000);
-  }
-
   return { scheduledAt, durationMinutes, dueAt, recurrence, recurrenceConfig };
 }
 

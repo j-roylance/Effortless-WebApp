@@ -12,7 +12,7 @@ Tasks earn tier tokens; users define likes per tier and spin to win them; vision
 | Like | `UserReward` | `/api/likes` |
 | Token | `RewardToken` | `/api/tokens`, `/api/spin` |
 | Vision | `Vision` | `/api/visions` |
-| Goal (chain step) | `Goal` | `/api/visions/:id/goals` |
+| Goal (chain step) | `Goal` | `/api/visions/:id/goals`; optional `parentGoalId` for sub-goals |
 
 Grep hits for `habit` in old token `source` values are expected.
 
@@ -45,7 +45,8 @@ Grep hits for `habit` in old token `source` values are expected.
 | `/likes` | LikesPage | `GET /likes`, `POST /spin` |
 | `/daily-settings` | Settings (DailySettingsPage) | `GET/PUT /daily-settings` |
 | `/visions` | VisionsPage | `GET /visions` |
-| `/visions/:id/chain` | VisionChainPage | `GET/POST/PATCH /visions/:id/goals` |
+| `/visions/:id/chain` | VisionChainPage | `GET/POST/PATCH /visions/:id/goals` (top-level goals) |
+| `/visions/:id/chain/:goalId` | VisionChainPage | `GET /visions/:id/goals?focus=:goalId` (sub-goals) |
 | `/ai` | AiPage | (client-only prompts) |
 | `/welcome` | WelcomePage | (signup onboarding only) |
 
@@ -53,7 +54,7 @@ Grep hits for `habit` in old token `source` values are expected.
 
 ## React Query keys
 
-`["tasks"]`, `["tokens"]`, `["likes"]`, `["visions"]`, `["vision-goals", visionId]`, `["daily-settings"]`, `["wheel-config", tier]`
+`["tasks"]`, `["tokens"]`, `["likes"]`, `["visions"]`, `["vision-goals", visionId, chainKey]`, `["daily-settings"]`, `["wheel-config", tier]`
 
 ## Do not commit
 

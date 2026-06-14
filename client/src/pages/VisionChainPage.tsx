@@ -9,17 +9,25 @@ import { QueryErrorBanner } from "../components/QueryErrorBanner";
 import { Toast } from "../components/Toast";
 
 export function VisionChainPage() {
-  const { id } = useParams();
+  const { id, goalId } = useParams();
   const visionId = id!;
+  const chainKey = goalId ?? "root";
   const queryClient = useQueryClient();
   const chainEndRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [pendingGoalId, setPendingGoalId] = useState<string | null>(null);
-  const [pendingKind, setPendingKind] = useState<"toggle" | "save" | null>(null);
+  const [pendingKind, setPendingKind] = useState<"toggle" | "save" | "delete" | null>(
+    null
+  );
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["vision-goals", visionId],
-    queryFn: () => api<VisionWithGoals>(`/visions/${visionId}/goals`),
+    queryKey: ["vision-goals", visionId, chainKey],
+    queryFn: () =>
+      api<VisionWithGoals>(
+        goalId
+          ? `/visions/${visionId}/goals?focus=${encodeURIComponent(goalId)}`
+          : `/visions/${visionId}/goals`
+      ),
     enabled: !!visionId && visionId !== "new",
   });
 
@@ -28,36 +36,48 @@ export function VisionChainPage() {
     setPendingKind(null);
   }
 
+  function invalidateChain() {
+    queryClient.invalidateQueries({ queryKey: ["vision-goals", visionId] });
+  }
+
   const toggleMutation = useMutation({
-    mutationFn: ({ goalId, completed }: { goalId: string; completed: boolean }) =>
-      api<Goal>(`/visions/${visionId}/goals/${goalId}`, {
+    mutationFn: ({ goalId: targetId, completed }: { goalId: string; completed: boolean }) =>
+      api<Goal>(`/visions/${visionId}/goals/${targetId}`, {
         method: "PATCH",
         body: JSON.stringify({ completed }),
       }),
-    onMutate: ({ goalId }) => {
-      setPendingGoalId(goalId);
+    onMutate: ({ goalId: targetId }) => {
+      setPendingGoalId(targetId);
       setPendingKind("toggle");
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vision-goals", visionId] });
-    },
+    onSuccess: () => invalidateChain(),
     onError: (err: Error) => setToast(err.message),
     onSettled: () => clearPending(),
   });
 
   const saveNameMutation = useMutation({
-    mutationFn: ({ goalId, name }: { goalId: string; name: string }) =>
-      api<Goal>(`/visions/${visionId}/goals/${goalId}`, {
+    mutationFn: ({ goalId: targetId, name }: { goalId: string; name: string }) =>
+      api<Goal>(`/visions/${visionId}/goals/${targetId}`, {
         method: "PATCH",
         body: JSON.stringify({ name }),
       }),
-    onMutate: ({ goalId }) => {
-      setPendingGoalId(goalId);
+    onMutate: ({ goalId: targetId }) => {
+      setPendingGoalId(targetId);
       setPendingKind("save");
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vision-goals", visionId] });
+    onSuccess: () => invalidateChain(),
+    onError: (err: Error) => setToast(err.message),
+    onSettled: () => clearPending(),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (targetId: string) =>
+      api(`/visions/${visionId}/goals/${targetId}`, { method: "DELETE" }),
+    onMutate: (targetId) => {
+      setPendingGoalId(targetId);
+      setPendingKind("delete");
     },
+    onSuccess: () => invalidateChain(),
     onError: (err: Error) => setToast(err.message),
     onSettled: () => clearPending(),
   });
@@ -66,10 +86,13 @@ export function VisionChainPage() {
     mutationFn: () =>
       api<Goal>(`/visions/${visionId}/goals`, {
         method: "POST",
-        body: JSON.stringify({ name: "New goal" }),
+        body: JSON.stringify({
+          name: "New goal",
+          ...(goalId ? { parentGoalId: goalId } : {}),
+        }),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vision-goals", visionId] });
+      invalidateChain();
       requestAnimationFrame(() => {
         chainEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
@@ -78,7 +101,19 @@ export function VisionChainPage() {
   });
 
   const vision = data?.vision;
+  const focusGoal = data?.focusGoal ?? null;
   const goals = data?.goals ?? [];
+  const isNested = !!goalId && !!focusGoal;
+  const topLabel = isNested ? "Goal" : "Vision";
+  const topName = isNested ? focusGoal.name : vision?.name ?? "";
+
+  function backPath(): string {
+    if (!goalId) return "/visions";
+    if (focusGoal?.parentGoalId) {
+      return `/visions/${visionId}/chain/${focusGoal.parentGoalId}`;
+    }
+    return `/visions/${visionId}/chain`;
+  }
 
   if (visionId === "new") {
     return <Navigate to="/visions" replace />;
@@ -89,7 +124,7 @@ export function VisionChainPage() {
       <PageHeader
         title="Vision Chain"
         action={
-          <Link to="/visions" className="neon-btn neon-btn-sm">
+          <Link to={backPath()} className="neon-btn neon-btn-sm">
             Back
           </Link>
         }
@@ -104,12 +139,12 @@ export function VisionChainPage() {
         />
       )}
 
-      {!isLoading && !isError && vision && (
+      {!isLoading && !isError && vision && (!goalId || focusGoal) && (
         <div className="vision-chain">
           <div className="vision-chain-step">
             <div className="vision-chain-node vision-chain-node--vision neon-card">
-              <span className="vision-chain-node-label">Vision</span>
-              <h3 className="vision-chain-vision-name">{vision.name}</h3>
+              <span className="vision-chain-node-label">{topLabel}</span>
+              <h3 className="vision-chain-vision-name">{topName}</h3>
             </div>
             {goals.length > 0 && <div className="vision-chain-connector" aria-hidden />}
           </div>
@@ -118,13 +153,18 @@ export function VisionChainPage() {
             <GoalChainNode
               key={goal.id}
               goal={goal}
+              visionId={visionId}
               isLast={index === goals.length - 1}
               toggling={pendingKind === "toggle" && pendingGoalId === goal.id}
               saving={pendingKind === "save" && pendingGoalId === goal.id}
-              onToggleComplete={(goalId, completed) =>
-                toggleMutation.mutate({ goalId, completed })
+              deleting={pendingKind === "delete" && pendingGoalId === goal.id}
+              onToggleComplete={(targetId, completed) =>
+                toggleMutation.mutate({ goalId: targetId, completed })
               }
-              onSaveName={(goalId, name) => saveNameMutation.mutate({ goalId, name })}
+              onSaveName={(targetId, name) =>
+                saveNameMutation.mutate({ goalId: targetId, name })
+              }
+              onDelete={(targetId) => deleteMutation.mutate(targetId)}
             />
           ))}
 
@@ -132,7 +172,7 @@ export function VisionChainPage() {
         </div>
       )}
 
-      {!isLoading && !isError && vision && (
+      {!isLoading && !isError && vision && (!goalId || focusGoal) && (
         <button
           type="button"
           className="fab vision-chain-fab"

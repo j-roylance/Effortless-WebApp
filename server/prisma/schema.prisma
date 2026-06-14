@@ -173,18 +173,22 @@ model Vision {
 }
 
 model Goal {
-  id          String    @id @default(cuid())
-  visionId    String
-  userId      String
-  name        String
-  sortOrder   Int       @default(0)
-  completedAt DateTime?
-  createdAt   DateTime  @default(now())
-  vision      Vision    @relation(fields: [visionId], references: [id], onDelete: Cascade)
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String    @id @default(cuid())
+  visionId     String
+  userId       String
+  name         String
+  sortOrder    Int       @default(0)
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  parentGoalId String?
+  vision       Vision    @relation(fields: [visionId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentGoal   Goal?     @relation("GoalSubgoals", fields: [parentGoalId], references: [id], onDelete: Cascade)
+  subGoals     Goal[]    @relation("GoalSubgoals")
 
   @@index([visionId])
   @@index([userId])
+  @@index([parentGoalId])
 }
 
 model SpinLog {

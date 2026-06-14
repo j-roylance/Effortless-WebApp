@@ -1369,6 +1369,42 @@ h3,
   bottom: calc(4.5rem + var(--safe-bottom));
 }
 
+.goal-action-sheet {
+  width: min(100%, 22rem);
+  padding: 1.25rem;
+}
+
+.goal-action-sheet-title {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.goal-action-sheet-name {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  color: var(--text-dim);
+  word-break: break-word;
+}
+
+.goal-action-sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.goal-action-sheet-actions .neon-btn {
+  width: 100%;
+}
+
+.goal-action-sheet-delete {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 .daily-settings-list {
   display: flex;
   flex-direction: column;

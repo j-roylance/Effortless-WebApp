@@ -5,7 +5,7 @@
  * Onboarding /welcome (no tab bar; signup only)
  * Shell:     / Tasks | /calendar | /likes | /daily-settings | /visions | /ai
  *            /tasks/new, /tasks/:id/edit
- *            /visions/new, /visions/:id/edit, /visions/:id/chain
+ *            /visions/new, /visions/:id/edit, /visions/:id/chain, /visions/:id/chain/:goalId
  */
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
@@ -48,6 +48,7 @@ export default function App() {
               <Route path="/visions/new" element={<VisionFormPage />} />
               <Route path="/visions/:id/edit" element={<VisionFormPage />} />
               <Route path="/visions/:id/chain" element={<VisionChainPage />} />
+              <Route path="/visions/:id/chain/:goalId" element={<VisionChainPage />} />
               <Route path="/ai" element={<AiPage />} />
             </Route>
           </Route>

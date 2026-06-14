@@ -11,6 +11,7 @@ export function serializeGoal(goal: Goal) {
     sortOrder: goal.sortOrder,
     completedAt: goal.completedAt?.toISOString() ?? null,
     createdAt: goal.createdAt.toISOString(),
+    parentGoalId: goal.parentGoalId ?? null,
   };
 }
 
@@ -19,16 +20,17 @@ export async function createGoalPenultimate(
   tx: Tx,
   userId: string,
   visionId: string,
-  name: string
+  name: string,
+  parentGoalId: string | null = null
 ): Promise<Goal> {
   const furthest = await tx.goal.findFirst({
-    where: { visionId, userId },
+    where: { visionId, userId, parentGoalId },
     orderBy: { sortOrder: "desc" },
   });
 
   if (!furthest) {
     return tx.goal.create({
-      data: { userId, visionId, name, sortOrder: 0 },
+      data: { userId, visionId, name, sortOrder: 0, parentGoalId },
     });
   }
 
@@ -43,6 +45,7 @@ export async function createGoalPenultimate(
       visionId,
       name,
       sortOrder: furthest.sortOrder,
+      parentGoalId,
     },
   });
 }

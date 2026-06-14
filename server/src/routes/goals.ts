@@ -10,6 +10,7 @@ goalsRouter.use(requireAuth);
 
 const goalBodySchema = z.object({
   name: z.string().trim().min(1).max(200),
+  parentGoalId: z.string().trim().min(1).nullable().optional(),
 });
 
 const goalPatchSchema = z.object({
@@ -23,6 +24,16 @@ async function loadVisionForUser(visionId: string, userId: string) {
   });
 }
 
+async function loadGoalForUser(
+  goalId: string,
+  visionId: string,
+  userId: string
+) {
+  return prisma.goal.findFirst({
+    where: { id: goalId, visionId, userId },
+  });
+}
+
 goalsRouter.get("/", async (req: AuthedRequest, res) => {
   const visionId = String(req.params.visionId);
   const vision = await loadVisionForUser(visionId, req.user!.userId);
@@ -31,13 +42,32 @@ goalsRouter.get("/", async (req: AuthedRequest, res) => {
     return;
   }
 
+  const focusParam = req.query.focus;
+  const focusGoalId =
+    typeof focusParam === "string" && focusParam.trim().length > 0
+      ? focusParam.trim()
+      : null;
+
+  let focusGoal = null;
+  let parentGoalId: string | null = null;
+
+  if (focusGoalId) {
+    focusGoal = await loadGoalForUser(focusGoalId, visionId, req.user!.userId);
+    if (!focusGoal) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    parentGoalId = focusGoal.id;
+  }
+
   const goals = await prisma.goal.findMany({
-    where: { visionId, userId: req.user!.userId },
+    where: { visionId, userId: req.user!.userId, parentGoalId },
     orderBy: { sortOrder: "asc" },
   });
 
   res.json({
     vision: serializeVision(vision),
+    focusGoal: focusGoal ? serializeGoal(focusGoal) : null,
     goals: goals.map(serializeGoal),
   });
 });
@@ -52,8 +82,24 @@ goalsRouter.post("/", async (req: AuthedRequest, res) => {
     }
 
     const body = goalBodySchema.parse(req.body);
+    const parentGoalId = body.parentGoalId ?? null;
+
+    if (parentGoalId) {
+      const parent = await loadGoalForUser(parentGoalId, visionId, req.user!.userId);
+      if (!parent) {
+        res.status(400).json({ error: "Parent goal not found" });
+        return;
+      }
+    }
+
     const goal = await prisma.$transaction((tx) =>
-      createGoalPenultimate(tx, req.user!.userId, visionId, body.name)
+      createGoalPenultimate(
+        tx,
+        req.user!.userId,
+        visionId,
+        body.name,
+        parentGoalId
+      )
     );
 
     res.status(201).json(serializeGoal(goal));
@@ -73,9 +119,7 @@ goalsRouter.patch("/:goalId", async (req: AuthedRequest, res) => {
       return;
     }
 
-    const existing = await prisma.goal.findFirst({
-      where: { id: goalId, visionId, userId: req.user!.userId },
-    });
+    const existing = await loadGoalForUser(goalId, visionId, req.user!.userId);
     if (!existing) {
       res.status(404).json({ error: "Not found" });
       return;
@@ -113,9 +157,7 @@ goalsRouter.delete("/:goalId", async (req: AuthedRequest, res) => {
     return;
   }
 
-  const existing = await prisma.goal.findFirst({
-    where: { id: goalId, visionId, userId: req.user!.userId },
-  });
+  const existing = await loadGoalForUser(goalId, visionId, req.user!.userId);
   if (!existing) {
     res.status(404).json({ error: "Not found" });
     return;

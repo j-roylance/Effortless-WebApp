@@ -68,10 +68,12 @@ export interface Goal {
   sortOrder: number;
   completedAt: string | null;
   createdAt: string;
+  parentGoalId: string | null;
 }
 
 export interface VisionWithGoals {
   vision: Vision;
+  focusGoal?: Goal | null;
   goals: Goal[];
 }
 

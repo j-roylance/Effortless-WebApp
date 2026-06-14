@@ -91,7 +91,7 @@ export function LikesPage() {
         const likes = likesByTier[tier];
         const tokenCount = balances?.[tier] ?? 0;
         const canClaim = schedule?.[tier]?.canClaim ?? true;
-        const canSpin = tokenCount > 0 && canClaim;
+        const canSpin = tokenCount > 0;
 
         return (
           <section key={tier} className="like-section neon-card">
@@ -123,10 +123,10 @@ export function LikesPage() {
                 disabled={!canSpin}
                 onClick={() => setSpinTier(tier)}
                 title={
-                  !canClaim
-                    ? "Schedule cap reached for this tier"
-                    : tokenCount === 0
-                      ? "No tokens"
+                  tokenCount === 0
+                    ? "No tokens"
+                    : !canClaim
+                      ? `Over cap (${schedule?.[tier]?.claimCount ?? 0}/${schedule?.[tier]?.limit ?? ""}) — spin anyway`
                       : `Spend ${tier} token`
                 }
               >

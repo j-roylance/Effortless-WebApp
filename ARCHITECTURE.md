@@ -29,7 +29,7 @@ Local dev: Vite proxies `/api` to `localhost:4000` ([`client/vite.config.ts`](cl
 | `services/spin.ts` | Outcome roll, like pick, schedule caps |
 | `services/tokens.ts` | Aggregate token balances |
 | `services/daily-rewards.ts` | Planning / all-musts / all-do-dates bonuses |
-| `services/goals.ts` | Goal serialization, penultimate insert |
+| `services/goals.ts` | Goal serialization, append-at-end insert |
 | `domain/tiers.ts` | Tier order, frequency labels, schedule windows |
 | `domain/visions.ts` | `serializeVision` for API JSON |
 | `middleware/auth.ts` | JWT from cookie or `Authorization` header |

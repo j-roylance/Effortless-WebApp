@@ -15,7 +15,7 @@ export function serializeGoal(goal: Goal) {
   };
 }
 
-/** Insert new goal immediately before the furthest goal in the chain. */
+/** Append new goal at the end of the chain (highest sortOrder). */
 export async function createGoalPenultimate(
   tx: Tx,
   userId: string,
@@ -23,20 +23,10 @@ export async function createGoalPenultimate(
   name: string,
   parentGoalId: string | null = null
 ): Promise<Goal> {
-  const furthest = await tx.goal.findFirst({
+  const last = await tx.goal.findFirst({
     where: { visionId, userId, parentGoalId },
     orderBy: { sortOrder: "desc" },
-  });
-
-  if (!furthest) {
-    return tx.goal.create({
-      data: { userId, visionId, name, sortOrder: 0, parentGoalId },
-    });
-  }
-
-  await tx.goal.update({
-    where: { id: furthest.id },
-    data: { sortOrder: furthest.sortOrder + 1 },
+    select: { sortOrder: true },
   });
 
   return tx.goal.create({
@@ -44,7 +34,7 @@ export async function createGoalPenultimate(
       userId,
       visionId,
       name,
-      sortOrder: furthest.sortOrder,
+      sortOrder: last ? last.sortOrder + 1 : 0,
       parentGoalId,
     },
   });

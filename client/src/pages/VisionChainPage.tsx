@@ -16,9 +16,9 @@ export function VisionChainPage() {
   const chainEndRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [pendingGoalId, setPendingGoalId] = useState<string | null>(null);
-  const [pendingKind, setPendingKind] = useState<"toggle" | "save" | "delete" | null>(
-    null
-  );
+  const [pendingKind, setPendingKind] = useState<
+    "toggle" | "save" | "delete" | "addBefore" | null
+  >(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["vision-goals", visionId, chainKey],
@@ -100,6 +100,24 @@ export function VisionChainPage() {
     onError: (err: Error) => setToast(err.message),
   });
 
+  const addBeforeMutation = useMutation({
+    mutationFn: (insertBeforeGoalId: string) =>
+      api<Goal>(`/visions/${visionId}/goals`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: "New goal",
+          insertBeforeGoalId,
+        }),
+      }),
+    onMutate: (targetId) => {
+      setPendingGoalId(targetId);
+      setPendingKind("addBefore");
+    },
+    onSuccess: () => invalidateChain(),
+    onError: (err: Error) => setToast(err.message),
+    onSettled: () => clearPending(),
+  });
+
   const vision = data?.vision;
   const focusGoal = data?.focusGoal ?? null;
   const goals = data?.goals ?? [];
@@ -158,12 +176,14 @@ export function VisionChainPage() {
               toggling={pendingKind === "toggle" && pendingGoalId === goal.id}
               saving={pendingKind === "save" && pendingGoalId === goal.id}
               deleting={pendingKind === "delete" && pendingGoalId === goal.id}
+              addingBefore={pendingKind === "addBefore" && pendingGoalId === goal.id}
               onToggleComplete={(targetId, completed) =>
                 toggleMutation.mutate({ goalId: targetId, completed })
               }
               onSaveName={(targetId, name) =>
                 saveNameMutation.mutate({ goalId: targetId, name })
               }
+              onAddBefore={(targetId) => addBeforeMutation.mutate(targetId)}
               onDelete={(targetId) => deleteMutation.mutate(targetId)}
             />
           ))}

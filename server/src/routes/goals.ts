@@ -3,7 +3,11 @@ import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { serializeVision } from "../domain/visions.js";
-import { createGoalPenultimate, serializeGoal } from "../services/goals.js";
+import {
+  createGoalPenultimate,
+  insertGoalBefore,
+  serializeGoal,
+} from "../services/goals.js";
 
 export const goalsRouter = Router({ mergeParams: true });
 goalsRouter.use(requireAuth);
@@ -11,6 +15,7 @@ goalsRouter.use(requireAuth);
 const goalBodySchema = z.object({
   name: z.string().trim().min(1).max(200),
   parentGoalId: z.string().trim().min(1).nullable().optional(),
+  insertBeforeGoalId: z.string().trim().min(1).optional(),
 });
 
 const goalPatchSchema = z.object({
@@ -82,25 +87,32 @@ goalsRouter.post("/", async (req: AuthedRequest, res) => {
     }
 
     const body = goalBodySchema.parse(req.body);
-    const parentGoalId = body.parentGoalId ?? null;
 
-    if (parentGoalId) {
-      const parent = await loadGoalForUser(parentGoalId, visionId, req.user!.userId);
-      if (!parent) {
-        res.status(400).json({ error: "Parent goal not found" });
-        return;
+    const goal = await prisma.$transaction(async (tx) => {
+      if (body.insertBeforeGoalId) {
+        return insertGoalBefore(
+          tx,
+          req.user!.userId,
+          visionId,
+          body.name,
+          body.insertBeforeGoalId
+        );
       }
-    }
 
-    const goal = await prisma.$transaction((tx) =>
-      createGoalPenultimate(
+      const parentGoalId = body.parentGoalId ?? null;
+      if (parentGoalId) {
+        const parent = await loadGoalForUser(parentGoalId, visionId, req.user!.userId);
+        if (!parent) throw new Error("Parent goal not found");
+      }
+
+      return createGoalPenultimate(
         tx,
         req.user!.userId,
         visionId,
         body.name,
         parentGoalId
-      )
-    );
+      );
+    });
 
     res.status(201).json(serializeGoal(goal));
   } catch (e) {

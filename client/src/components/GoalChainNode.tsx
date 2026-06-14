@@ -8,9 +8,11 @@ export function GoalChainNode({
   isLast,
   onToggleComplete,
   onSaveName,
+  onAddBefore,
   onDelete,
   toggling,
   saving,
+  addingBefore,
   deleting,
 }: {
   goal: Goal;
@@ -18,9 +20,11 @@ export function GoalChainNode({
   isLast: boolean;
   onToggleComplete: (goalId: string, completed: boolean) => void;
   onSaveName: (goalId: string, name: string) => void;
+  onAddBefore: (goalId: string) => void;
   onDelete: (goalId: string) => void;
   toggling: boolean;
   saving: boolean;
+  addingBefore: boolean;
   deleting: boolean;
 }) {
   const navigate = useNavigate();
@@ -29,7 +33,7 @@ export function GoalChainNode({
   const [menuOpen, setMenuOpen] = useState(false);
   const [draft, setDraft] = useState(goal.name);
   const inputRef = useRef<HTMLInputElement>(null);
-  const busy = toggling || saving || deleting;
+  const busy = toggling || saving || deleting || addingBefore;
 
   useEffect(() => {
     if (!editing) setDraft(goal.name);
@@ -143,6 +147,17 @@ export function GoalChainNode({
                 }}
               >
                 Rename
+              </button>
+              <button
+                type="button"
+                className="neon-btn"
+                disabled={addingBefore}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onAddBefore(goal.id);
+                }}
+              >
+                {addingBefore ? "Adding…" : "Add step before this"}
               </button>
               <button
                 type="button"

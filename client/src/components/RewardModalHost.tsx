@@ -11,7 +11,15 @@ export function RewardModalHost({
 }) {
   if (!reward) return null;
   if (reward.type === "token") {
-    return <TokenRewardModal tier={reward.tier} onClose={onClose} />;
+    return (
+      <TokenRewardModal tier={reward.tier} headline={reward.headline} onClose={onClose} />
+    );
   }
-  return <DefiniteRewardModal label={reward.label} onClose={onClose} />;
+  return (
+    <DefiniteRewardModal
+      label={reward.label}
+      headline={reward.headline}
+      onClose={onClose}
+    />
+  );
 }

@@ -77,6 +77,18 @@ export function rewardSummary(
   return "No reward";
 }
 
+/** User-facing headline for daily milestone reward modals (matches server `source`). */
+export const DAILY_BONUS_HEADLINE: Record<string, string> = {
+  daily_planning: "Daily Schedule Complete!",
+  daily_all_musts: "All Daily Must Tasks Accomplished!",
+  daily_all_do_dates: "All Daily Tasks Accomplished!",
+};
+
+export function headlineForRewardSource(source: string | undefined): string | undefined {
+  if (!source) return undefined;
+  return DAILY_BONUS_HEADLINE[source];
+}
+
 export type RewardQueueItem =
-  | { type: "token"; tier: RewardTier }
-  | { type: "definite"; label: string };
+  | { type: "token"; tier: RewardTier; headline?: string }
+  | { type: "definite"; label: string; headline?: string };

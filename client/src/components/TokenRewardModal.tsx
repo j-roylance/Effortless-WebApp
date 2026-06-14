@@ -14,9 +14,11 @@ function tierIntensity(tier: RewardTier) {
 
 export function TokenRewardModal({
   tier,
+  headline,
   onClose,
 }: {
   tier: RewardTier;
+  headline?: string;
   onClose: () => void;
 }) {
   const color = TIER_COLORS[tier];
@@ -104,11 +106,16 @@ export function TokenRewardModal({
           </div>
         </div>
 
-        <h2 id="token-reward-title" className="token-reward-title">
-          Congrats!
+        <h2
+          id="token-reward-title"
+          className={`token-reward-title${headline ? " token-reward-title--milestone" : ""}`}
+        >
+          {headline ?? "Congrats!"}
         </h2>
         <p className="token-reward-message">
-          You got a {tier} reward token!
+          {headline
+            ? `You earned a ${tier} reward token!`
+            : `You got a ${tier} reward token!`}
         </p>
 
         <button

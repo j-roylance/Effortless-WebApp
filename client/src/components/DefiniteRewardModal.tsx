@@ -1,8 +1,10 @@
 export function DefiniteRewardModal({
   label,
+  headline,
   onClose,
 }: {
   label: string;
+  headline?: string;
   onClose: () => void;
 }) {
   return (
@@ -13,8 +15,12 @@ export function DefiniteRewardModal({
         role="dialog"
         aria-labelledby="definite-reward-title"
       >
-        <h2 id="definite-reward-title" style={{ marginTop: 0, color: "var(--success)" }}>
-          Reward earned
+        <h2
+          id="definite-reward-title"
+          className={headline ? "reward-milestone-title" : undefined}
+          style={headline ? undefined : { marginTop: 0, color: "var(--success)" }}
+        >
+          {headline ?? "Reward earned"}
         </h2>
         <p style={{ color: "var(--text-dim)", marginTop: 0 }}>You get:</p>
         <p style={{ fontSize: "1.25rem", margin: "0 0 1.25rem" }}>{label}</p>

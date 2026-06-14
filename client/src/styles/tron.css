@@ -1024,6 +1024,23 @@ h3,
   text-shadow: 0 0 16px color-mix(in srgb, var(--token-color) 50%, transparent);
 }
 
+.token-reward-title--milestone {
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+}
+
+.reward-milestone-title {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.35;
+  color: var(--success);
+  text-shadow: 0 0 16px rgba(0, 255, 136, 0.35);
+}
+
 .token-reward-message {
   margin: 0 0 1.25rem;
   font-size: 1rem;

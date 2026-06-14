@@ -1,6 +1,6 @@
 /**
  * Spin randomizer: spends a token, rolls outcome, optionally picks a UserLike (UserReward row).
- * Schedule caps use SpinLog + user timezone (X-Timezone header).
+ * Schedule caps are tracked for the Likes UI (GET /tokens schedule); spins are not blocked server-side.
  */
 import { RewardTier, SpinOutcome, type Prisma } from "@prisma/client";
 import {
@@ -97,7 +97,6 @@ export interface SpinResult {
   spinnerLikes: SpinWheelSlice[];
   winningIndex: number;
   tokenBalances: Record<RewardTier, number>;
-  scheduleBlocked?: boolean;
 }
 
 export async function executeSpin(
@@ -116,32 +115,13 @@ export async function executeSpin(
   );
 
   const spinCore = await prisma.$transaction(async (tx) => {
-    const claimCount = await countClaimsInBucket(userId, tokenTier, timeZone, tx);
-    if (!canClaimTier(tokenTier, claimCount)) {
-      const err = Object.assign(
-        new Error(
-          `Schedule cap reached for ${tokenTier} (${tierClaimLimit(tokenTier)} per period)`
-        ),
-        { status: 409, code: "schedule_cap" }
-      );
-      throw err;
-    }
-
     const token = await spendOldestToken(tx, userId, tokenTier);
     if (!token) {
       throw Object.assign(new Error("No unspent token for this tier"), { status: 400 });
     }
 
     let outcome = rollWeightedOutcome(outcomeWeights);
-    let effectiveTier = effectiveTierForOutcome(tokenTier, outcome);
-
-    if (shouldSpinForOutcome(tokenTier, outcome)) {
-      const effectiveClaims = await countClaimsInBucket(userId, effectiveTier, timeZone, tx);
-      if (!canClaimTier(effectiveTier, effectiveClaims)) {
-        outcome = SpinOutcome.NoReward;
-        effectiveTier = tokenTier;
-      }
-    }
+    const effectiveTier = effectiveTierForOutcome(tokenTier, outcome);
 
     let reward: { id: string; label: string } | undefined;
     let spinnerRewards: SpinWheelSlice[] = [];

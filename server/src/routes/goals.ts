@@ -88,6 +88,11 @@ goalsRouter.post("/", async (req: AuthedRequest, res) => {
 
     const body = goalBodySchema.parse(req.body);
 
+    if (body.insertBeforeGoalId && body.parentGoalId) {
+      res.status(400).json({ error: "Use insertBeforeGoalId or parentGoalId, not both" });
+      return;
+    }
+
     const goal = await prisma.$transaction(async (tx) => {
       if (body.insertBeforeGoalId) {
         return insertGoalBefore(

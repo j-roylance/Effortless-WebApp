@@ -121,7 +121,7 @@ export async function executeSpin(
     }
 
     let outcome = rollWeightedOutcome(outcomeWeights);
-    const effectiveTier = effectiveTierForOutcome(tokenTier, outcome);
+    let effectiveTier = effectiveTierForOutcome(tokenTier, outcome);
 
     let reward: { id: string; label: string } | undefined;
     let spinnerRewards: SpinWheelSlice[] = [];
@@ -137,6 +137,7 @@ export async function executeSpin(
 
       if (pool.length === 0) {
         outcome = SpinOutcome.NoReward;
+        effectiveTier = tokenTier;
       } else {
         const wheelConfig = await tx.tierWheelConfig.findUnique({
           where: { userId_tier: { userId, tier: effectiveTier } },

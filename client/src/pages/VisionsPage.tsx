@@ -26,12 +26,14 @@ function reorderVisions(list: Vision[], fromId: string, toId: string): Vision[] 
 
 export function VisionsPage() {
   const queryClient = useQueryClient();
-  const [orderedVisions, setOrderedVisions] = useState<Vision[]>([]);
+  const [dragOrder, setDragOrder] = useState<Vision[] | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const dragStateRef = useRef<{
-    onMove: (e: PointerEvent) => void;
-    onUp: (e: PointerEvent) => void;
+    handle: HTMLButtonElement;
+    pointerId: number;
+    onMove: (e: globalThis.PointerEvent) => void;
+    onUp: (e: globalThis.PointerEvent) => void;
   } | null>(null);
   const suppressNavigationRef = useRef(false);
 
@@ -40,11 +42,8 @@ export function VisionsPage() {
     queryFn: () => api<{ visions: Vision[] }>("/visions"),
   });
 
-  useEffect(() => {
-    if (!draggingId) {
-      setOrderedVisions(sortVisions(data?.visions ?? []));
-    }
-  }, [data, draggingId]);
+  const serverVisions = sortVisions(data?.visions ?? []);
+  const displayVisions = dragOrder ?? serverVisions;
 
   const reorderMutation = useMutation({
     mutationFn: (visionIds: string[]) =>
@@ -55,12 +54,18 @@ export function VisionsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["visions"] });
     },
-    onError: (err: Error) => setToast(err.message),
+    onError: (err: Error) => {
+      setToast(err.message);
+      setDragOrder(null);
+    },
   });
 
   const clearDragListeners = useCallback(() => {
     const state = dragStateRef.current;
     if (!state) return;
+    if (state.handle.hasPointerCapture(state.pointerId)) {
+      state.handle.releasePointerCapture(state.pointerId);
+    }
     window.removeEventListener("pointermove", state.onMove);
     window.removeEventListener("pointerup", state.onUp);
     window.removeEventListener("pointercancel", state.onUp);
@@ -74,13 +79,14 @@ export function VisionsPage() {
       if (reorderMutation.isPending) return;
 
       clearDragListeners();
-      e.currentTarget.setPointerCapture(e.pointerId);
+      const handle = e.currentTarget;
+      handle.setPointerCapture(e.pointerId);
 
-      const startOrder = orderedVisions;
+      const startOrder = serverVisions;
       let currentOrder = startOrder;
       let moved = false;
 
-      const onMove = (ev: PointerEvent) => {
+      const onMove = (ev: globalThis.PointerEvent) => {
         const target = document.elementFromPoint(ev.clientX, ev.clientY);
         const card = target?.closest<HTMLElement>("[data-vision-id]");
         const overId = card?.dataset.visionId;
@@ -90,7 +96,7 @@ export function VisionsPage() {
         if (!sameVisionOrder(next, currentOrder)) {
           moved = true;
           currentOrder = next;
-          setOrderedVisions(next);
+          setDragOrder(next);
         }
       };
 
@@ -100,19 +106,22 @@ export function VisionsPage() {
 
         if (moved) {
           suppressNavigationRef.current = true;
-          reorderMutation.mutate(currentOrder.map((v) => v.id));
+          reorderMutation.mutate(currentOrder.map((v) => v.id), {
+            onSettled: () => setDragOrder(null),
+          });
         } else {
-          setOrderedVisions(startOrder);
+          setDragOrder(null);
         }
       };
 
-      dragStateRef.current = { onMove, onUp };
+      dragStateRef.current = { handle, pointerId: e.pointerId, onMove, onUp };
+      setDragOrder(startOrder);
       setDraggingId(visionId);
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
       window.addEventListener("pointercancel", onUp);
     },
-    [clearDragListeners, orderedVisions, reorderMutation]
+    [clearDragListeners, reorderMutation, serverVisions]
   );
 
   return (
@@ -127,16 +136,16 @@ export function VisionsPage() {
 
       {isError && <QueryErrorBanner onRetry={() => refetch()} />}
 
-      {!isLoading && !isError && orderedVisions.length === 0 && (
+      {!isLoading && !isError && serverVisions.length === 0 && (
         <div className="empty-state neon-card">
           <p>No visions yet.</p>
           <p>Tap + to add your first life vision.</p>
         </div>
       )}
 
-      {!isLoading && !isError && orderedVisions.length > 0 && (
+      {!isLoading && !isError && displayVisions.length > 0 && (
         <div className={`vision-list${draggingId ? " vision-list--dragging" : ""}`}>
-          {orderedVisions.map((vision) => (
+          {displayVisions.map((vision) => (
             <VisionCard
               key={vision.id}
               vision={vision}

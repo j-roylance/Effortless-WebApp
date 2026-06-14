@@ -39,6 +39,54 @@ visionsRouter.post("/", async (req: AuthedRequest, res) => {
   }
 });
 
+const reorderBodySchema = z.object({
+  visionIds: z.array(z.string().trim().min(1)).min(1),
+});
+
+visionsRouter.put("/reorder", async (req: AuthedRequest, res) => {
+  try {
+    const body = reorderBodySchema.parse(req.body);
+    const userId = req.user!.userId;
+
+    if (new Set(body.visionIds).size !== body.visionIds.length) {
+      res.status(400).json({ error: "Duplicate vision ids" });
+      return;
+    }
+
+    const visions = await prisma.vision.findMany({
+      where: { userId, archivedAt: null, id: { in: body.visionIds } },
+      select: { id: true },
+    });
+
+    if (visions.length !== body.visionIds.length) {
+      res.status(400).json({ error: "Invalid vision list" });
+      return;
+    }
+
+    const total = await prisma.vision.count({
+      where: { userId, archivedAt: null },
+    });
+    if (total !== body.visionIds.length) {
+      res.status(400).json({ error: "Must include all visions" });
+      return;
+    }
+
+    await prisma.$transaction(
+      body.visionIds.map((id, index) =>
+        prisma.vision.update({
+          where: { id },
+          data: { sortOrder: index },
+        })
+      )
+    );
+
+    res.json({ ok: true });
+  } catch (e) {
+    const err = e as Error;
+    res.status(400).json({ error: err.message });
+  }
+});
+
 visionsRouter.patch("/:id", async (req: AuthedRequest, res) => {
   try {
     const body = visionBodySchema.partial().parse(req.body);

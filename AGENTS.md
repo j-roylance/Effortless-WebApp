@@ -33,6 +33,9 @@ Grep hits for `habit` in old token `source` values are expected.
 | Spin UI / animations | `RandomizerModal`, `OutcomeRoll`, `SpinnerWheel`, `client/src/domain/spin.ts` |
 | Calendar / repeat overrides | `client/src/domain/calendar.ts`, `schedule-overrides.ts`, `PATCH /tasks/:id` with `occurrenceDayKey` |
 | Task / daily rewards | `rewardKind` on `Habit`, `planningReward` JSON on `DailySettings`, `client/src/components/RewardPicker.tsx` |
+| Like split/combine ratios | `server/src/domain/like-conversions.ts` **and** `client/src/domain/like-conversions.ts` |
+| Like usage / ledger | `server/src/services/like-tracking.ts`, `LikeCreditLedger` model |
+| Like split/combine UI | `LikeSplitModal`, `LikeCombineModal`, `LikesPage` |
 | Schema | `server/prisma/schema.prisma` → `npx prisma migrate dev` |
 
 ## Routes (UI → page → API)
@@ -42,7 +45,7 @@ Grep hits for `habit` in old token `source` values are expected.
 | `/` | TasksPage | `GET /tasks`, `POST /tasks/:id/achieve` |
 | `/tasks/new`, `/tasks/:id/edit` | TaskFormPage | `POST/PATCH/DELETE /tasks` |
 | `/calendar` | CalendarPage | `GET /tasks`, `PATCH /tasks/:id` |
-| `/likes` | LikesPage | `GET /likes` (with `rewardedCount`/`usedCount`), `PATCH /likes/:id/used`, `POST /likes/reset-tier` |
+| `/likes` | LikesPage | `GET /likes` (with `rewardedCount`/`usedCount`/`availableCount`), `PATCH /likes/:id/used`, `POST /likes/:id/split`, `POST /likes/combine`, `POST /likes/reset-tier` |
 | `/daily-settings` | Settings (DailySettingsPage) | `GET/PUT /daily-settings` |
 | `/visions` | VisionsPage | `GET /visions` |
 | `/visions/:id/chain` | VisionChainPage | `GET/POST/PATCH /visions/:id/goals` (top-level goals) |

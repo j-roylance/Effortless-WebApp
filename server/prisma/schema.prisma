@@ -67,9 +67,10 @@ model User {
   dailyBonusClaims DailyBonusClaim[]
   visions        Vision[]
   goals          Goal[]
-  likeUsedCounts LikeUsedCount[]
-  tierLikeResets TierLikeReset[]
-  likeGrantLogs  LikeGrantLog[]
+  likeUsedCounts   LikeUsedCount[]
+  tierLikeResets   TierLikeReset[]
+  likeGrantLogs    LikeGrantLog[]
+  likeCreditLedger LikeCreditLedger[]
 }
 
 model Habit {
@@ -107,8 +108,9 @@ model UserReward {
   createdAt      DateTime        @default(now())
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   habits         Habit[]
-  likeUsedCounts LikeUsedCount[]
-  likeGrantLogs  LikeGrantLog[]
+  likeUsedCounts   LikeUsedCount[]
+  likeGrantLogs    LikeGrantLog[]
+  likeCreditLedger LikeCreditLedger[]
 
   @@index([userId, tier])
 }
@@ -148,6 +150,20 @@ model LikeGrantLog {
   like      UserReward @relation(fields: [likeId], references: [id], onDelete: Cascade)
 
   @@index([userId, likeId, createdAt])
+}
+
+model LikeCreditLedger {
+  id        String     @id @default(cuid())
+  userId    String
+  likeId    String
+  bucketKey String
+  delta     Int
+  kind      String
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  like      UserReward @relation(fields: [likeId], references: [id], onDelete: Cascade)
+
+  @@index([userId, likeId, bucketKey])
 }
 
 model RewardToken {

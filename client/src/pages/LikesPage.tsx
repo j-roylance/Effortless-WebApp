@@ -8,7 +8,15 @@ import {
   TIER_FREQUENCY_LABEL,
   type RewardTier,
 } from "../domain/tiers";
+import {
+  canCombineToTier,
+  canSplitFromTier,
+  conversionCount,
+  lowerTierFor,
+} from "../domain/like-conversions";
 import { LikeUsageStepper } from "../components/LikeUsageStepper";
+import { LikeSplitModal } from "../components/LikeSplitModal";
+import { LikeCombineModal } from "../components/LikeCombineModal";
 import { PageHeader } from "../components/PageHeader";
 import { QueryErrorBanner } from "../components/QueryErrorBanner";
 import { Toast } from "../components/Toast";
@@ -24,6 +32,8 @@ export function LikesPage() {
   );
   const [toast, setToast] = useState<string | null>(null);
   const [pendingUsedLikeId, setPendingUsedLikeId] = useState<string | null>(null);
+  const [splitLike, setSplitLike] = useState<UserLike | null>(null);
+  const [combineTier, setCombineTier] = useState<RewardTier | null>(null);
 
   const {
     data: likesData,
@@ -109,7 +119,8 @@ export function LikesPage() {
         Things you enjoy at each tier. Spend tokens to spin and maybe win one.
       </p>
       <p className="like-tracking-legend">
-        Per like: <strong>rewarded</strong> (earned) · <strong>used</strong> (− / +)
+        Per like: <strong>rewarded</strong> (earned) · <strong>used</strong> (− / +) ·{" "}
+        <strong>available</strong> (split/combine)
       </p>
 
       {(likesError || tokensError) && (
@@ -126,6 +137,14 @@ export function LikesPage() {
         const tokenCount = balances?.[tier] ?? 0;
         const canClaim = schedule?.[tier]?.canClaim ?? true;
         const canSpin = tokenCount > 0;
+        const lowerTier = tier !== "Bronze" ? lowerTierFor(tier) : null;
+        const lowerTierLikes = lowerTier ? likesByTier[lowerTier] : [];
+        const lowerPool = lowerTierLikes.reduce((sum, l) => sum + l.availableCount, 0);
+        const canCombine =
+          canCombineToTier(tier) &&
+          tierLikes.length > 0 &&
+          lowerTierLikes.length > 0 &&
+          lowerPool >= conversionCount(tier);
 
         return (
           <section key={tier} className="like-section neon-card">
@@ -152,6 +171,16 @@ export function LikesPage() {
                 </button>
               </div>
               <div className="like-section-actions">
+                {canCombine && (
+                  <button
+                    type="button"
+                    className="neon-btn neon-btn-sm"
+                    onClick={() => setCombineTier(tier)}
+                    title={`Combine ${conversionCount(tier)} ${lowerTier} into 1 ${tier}`}
+                  >
+                    Combine
+                  </button>
+                )}
                 <button
                   type="button"
                   className="neon-btn neon-btn-sm"
@@ -192,9 +221,20 @@ export function LikesPage() {
                   <LikeUsageStepper
                     rewardedCount={item.rewardedCount}
                     usedCount={item.usedCount}
+                    availableCount={item.availableCount}
                     disabled={pendingUsedLikeId === item.id}
                     onDelta={(delta) => usedMutation.mutate({ likeId: item.id, delta })}
                   />
+                  {canSplitFromTier(tier) && item.availableCount >= 1 && (
+                    <button
+                      type="button"
+                      className="neon-btn neon-btn-sm like-split-btn"
+                      onClick={() => setSplitLike(item)}
+                      title={`Split into ${conversionCount(tier)} ${lowerTierFor(tier)}`}
+                    >
+                      Split
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="icon-btn"
@@ -255,6 +295,23 @@ export function LikesPage() {
           tier={wheelEditTier}
           likes={likesByTier[wheelEditTier]}
           onClose={() => setWheelEditTier(null)}
+        />
+      )}
+
+      {splitLike && (
+        <LikeSplitModal
+          sourceLike={splitLike}
+          lowerTierLikes={likesByTier[lowerTierFor(splitLike.tier)]}
+          onClose={() => setSplitLike(null)}
+        />
+      )}
+
+      {combineTier && (
+        <LikeCombineModal
+          targetTier={combineTier}
+          targetTierLikes={likesByTier[combineTier]}
+          lowerTierLikes={likesByTier[lowerTierFor(combineTier)]}
+          onClose={() => setCombineTier(null)}
         />
       )}
 

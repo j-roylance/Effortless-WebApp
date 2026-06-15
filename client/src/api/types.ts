@@ -39,6 +39,8 @@ export interface UserLike {
   createdAt: string;
   rewardedCount: number;
   usedCount: number;
+  ledgerDelta: number;
+  availableCount: number;
 }
 
 export interface LikeTrackingMeta {

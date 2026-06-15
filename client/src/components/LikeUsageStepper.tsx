@@ -1,11 +1,13 @@
 export function LikeUsageStepper({
   rewardedCount,
   usedCount,
+  availableCount,
   disabled,
   onDelta,
 }: {
   rewardedCount: number;
   usedCount: number;
+  availableCount: number;
   disabled?: boolean;
   onDelta: (delta: 1 | -1) => void;
 }) {
@@ -37,6 +39,9 @@ export function LikeUsageStepper({
           +
         </button>
       </div>
+      <span className="like-usage-available" title="Available for split/combine">
+        {availableCount}
+      </span>
     </div>
   );
 }

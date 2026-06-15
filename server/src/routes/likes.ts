@@ -5,8 +5,10 @@ import { prisma } from "../lib/prisma.js";
 import { isValidTier } from "../domain/tiers.js";
 import {
   adjustLikeUsedCount,
+  combineLikeCredits,
   likesWithTracking,
   resetTierLikeTracking,
+  splitLikeCredit,
 } from "../services/like-tracking.js";
 
 export const likesRouter = Router();
@@ -28,6 +30,20 @@ const usedBodySchema = z
 
 const resetTierSchema = z.object({
   tier: z.string().refine(isValidTier, { message: "Invalid tier" }),
+});
+
+const allocationSchema = z.object({
+  likeId: z.string().min(1),
+  count: z.number().int().min(1),
+});
+
+const splitBodySchema = z.object({
+  allocations: z.array(allocationSchema).min(1),
+});
+
+const combineBodySchema = z.object({
+  targetLikeId: z.string().min(1),
+  allocations: z.array(allocationSchema).min(1),
 });
 
 likesRouter.get("/", async (req: AuthedRequest, res) => {
@@ -73,6 +89,36 @@ likesRouter.post("/", async (req: AuthedRequest, res) => {
   } catch (e) {
     const err = e as Error;
     res.status(400).json({ error: err.message });
+  }
+});
+
+likesRouter.post("/combine", async (req: AuthedRequest, res) => {
+  try {
+    const body = combineBodySchema.parse(req.body);
+    const timeZone = String(req.headers["x-timezone"] ?? "UTC");
+    await combineLikeCredits(
+      req.user!.userId,
+      body.targetLikeId,
+      body.allocations,
+      timeZone
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    const err = e as Error & { status?: number };
+    res.status(err.status ?? 400).json({ error: err.message });
+  }
+});
+
+likesRouter.post("/:id/split", async (req: AuthedRequest, res) => {
+  try {
+    const likeId = String(req.params.id);
+    const body = splitBodySchema.parse(req.body);
+    const timeZone = String(req.headers["x-timezone"] ?? "UTC");
+    await splitLikeCredit(req.user!.userId, likeId, body.allocations, timeZone);
+    res.json({ ok: true });
+  } catch (e) {
+    const err = e as Error & { status?: number };
+    res.status(err.status ?? 400).json({ error: err.message });
   }
 });
 

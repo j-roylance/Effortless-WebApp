@@ -36,6 +36,7 @@ Grep hits for `habit` in old token `source` values are expected.
 | Like split/combine ratios | `server/src/domain/like-conversions.ts` **and** `client/src/domain/like-conversions.ts` |
 | Like usage / ledger | `server/src/services/like-tracking.ts`, `LikeCreditLedger` model |
 | Like split/combine UI | `LikeSplitModal`, `LikeCombineModal`, `LikesPage` |
+| Account backup / restore | `server/src/services/account-backup.ts`, `AccountBackupSection`, `GET/POST /account/backup` |
 | Schema | `server/prisma/schema.prisma` → `npx prisma migrate dev` |
 
 ## Routes (UI → page → API)
@@ -46,7 +47,7 @@ Grep hits for `habit` in old token `source` values are expected.
 | `/tasks/new`, `/tasks/:id/edit` | TaskFormPage | `POST/PATCH /tasks` with `rewards[]` |
 | `/calendar` | CalendarPage | `GET /tasks`, `PATCH /tasks/:id` |
 | `/likes` | LikesPage | `GET /likes` (with `rewardedCount`/`usedCount`/`availableCount`), `PATCH /likes/:id/used`, `POST /likes/:id/split`, `POST /likes/combine`, `POST /likes/reset-tier` |
-| `/daily-settings` | Settings (DailySettingsPage) | `GET/PUT /daily-settings` |
+| `/daily-settings` | Settings (DailySettingsPage) | `GET/PUT /daily-settings`, `GET/POST /account/backup` |
 | `/visions` | VisionsPage | `GET /visions` |
 | `/visions/:id/chain` | VisionChainPage | `GET/POST/PATCH /visions/:id/goals` (top-level goals) |
 | `/visions/:id/chain/:goalId` | VisionChainPage | `GET /visions/:id/goals?focus=:goalId` (sub-goals) |

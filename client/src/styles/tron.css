@@ -1709,6 +1709,26 @@ h3,
   color: var(--cyan);
 }
 
+.account-backup-section {
+  margin-top: 1.5rem;
+}
+
+.account-backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.account-backup-file-input {
+  display: none;
+}
+
+.account-backup-message {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: var(--success);
+}
+
 .spin-odds-editor {
   display: flex;
   flex-direction: column;

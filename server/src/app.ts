@@ -14,6 +14,7 @@ import { spinRouter } from "./routes/spin.js";
 import { wheelConfigRouter } from "./routes/wheel-config.js";
 import { dailySettingsRouter } from "./routes/daily-settings.js";
 import { visionsRouter } from "./routes/visions.js";
+import { accountBackupRouter } from "./routes/account-backup.js";
 
 export const app = express();
 
@@ -23,7 +24,7 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 
 app.get("/api/health", (_req, res) => {
@@ -38,3 +39,4 @@ app.use("/api/spin", spinRouter);
 app.use("/api/wheel-config", wheelConfigRouter);
 app.use("/api/daily-settings", dailySettingsRouter);
 app.use("/api/visions", visionsRouter);
+app.use("/api/account/backup", accountBackupRouter);

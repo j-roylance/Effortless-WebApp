@@ -6,6 +6,7 @@ import { PageHeader } from "../components/PageHeader";
 import { QueryErrorBanner } from "../components/QueryErrorBanner";
 import { RewardPicker } from "../components/RewardPicker";
 import { SpinOddsEditor } from "../components/SpinOddsEditor";
+import { AccountBackupSection } from "../components/AccountBackupSection";
 import { Toast } from "../components/Toast";
 import {
   DEFAULT_DAILY_SETTINGS,
@@ -168,6 +169,8 @@ export function DailySettingsPage() {
       >
         {saveMutation.isPending ? "Saving…" : saved ? "Saved!" : "Save settings"}
       </button>
+
+      <AccountBackupSection />
       </>
       )}
 

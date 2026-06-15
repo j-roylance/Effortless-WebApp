@@ -17,11 +17,19 @@ import {
   taskOccursOnDay,
 } from "../domain/schedule-overrides.js";
 import {
+  collectLikeIdsFromRewards,
+  enrichTaskRewards,
+  parseTaskRewards,
+  resolveTaskRewards,
+  storageFromTaskRewards,
+  taskRewardsFromLegacy,
+  type ActiveMilestoneReward,
   normalizeTaskRewardInput,
-  resolveTaskRewardGrant,
   taskRewardStorageFields,
   validateTaskRewardFields,
   validateTaskRewardLike,
+  validateTaskRewardsList,
+  validateTaskRewardsLikes,
 } from "../domain/rewards.js";
 import { dayKeyForTimezone, isSameDayInTimezone, safeTimeZone } from "../domain/daily.js";
 import { evaluateAchievementBonuses } from "../services/daily-rewards.js";
@@ -42,8 +50,16 @@ const optionalTierSchema = z
   .nullable()
   .optional();
 
+const milestoneRewardSchema = z.object({
+  kind: z.enum(["none", "token", "like", "custom"]),
+  tier: z.string().optional(),
+  likeId: z.string().optional(),
+  label: z.string().optional(),
+});
+
 const taskBodySchema = z.object({
   name: z.string().min(1).max(200),
+  rewards: z.array(milestoneRewardSchema).optional(),
   rewardKind: z.nativeEnum(TaskRewardKind).optional(),
   tier: optionalTierSchema,
   rewardLikeId: z.string().nullable().optional(),
@@ -138,33 +154,87 @@ function toJsonOverrides(
   return overrides as unknown as Prisma.InputJsonValue;
 }
 
-function serializeTask(row: {
-  section: TaskSection;
-  scheduledAt: Date | null;
-  dueAt: Date | null;
-  recurrence: TaskRecurrence;
-  recurrenceConfig: unknown;
-  scheduleOverrides?: unknown;
-  rewardKind: TaskRewardKind;
-  tier: RewardTier | null;
-  rewardLikeId: string | null;
-  customRewardLabel: string | null;
-  rewardLike?: { label: string } | null;
-  [key: string]: unknown;
-}) {
+function toJsonTaskRewards(
+  rewards: ActiveMilestoneReward[]
+): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  if (rewards.length === 0) return Prisma.JsonNull;
+  return storageFromTaskRewards(rewards).taskRewards as unknown as Prisma.InputJsonValue;
+}
+
+function serializeTask(
+  row: {
+    section: TaskSection;
+    scheduledAt: Date | null;
+    dueAt: Date | null;
+    recurrence: TaskRecurrence;
+    recurrenceConfig: unknown;
+    scheduleOverrides?: unknown;
+    taskRewards?: unknown;
+    rewardKind: TaskRewardKind;
+    tier: RewardTier | null;
+    rewardLikeId: string | null;
+    customRewardLabel: string | null;
+    rewardLike?: { label: string } | null;
+    [key: string]: unknown;
+  },
+  likeLabelsById: Map<string, string>
+) {
+  const legacy = {
+    rewardKind: row.rewardKind,
+    tier: row.tier,
+    rewardLikeId: row.rewardLikeId,
+    customRewardLabel: row.customRewardLabel,
+  };
+  const resolved = resolveTaskRewards(row.taskRewards, legacy);
+  const rewards = enrichTaskRewards(resolved, likeLabelsById);
+
   return {
     ...row,
     section: normalizeSection(row.section),
     recurrenceConfig: parseRecurrenceConfig(row.recurrenceConfig),
     scheduleOverrides: parseScheduleOverrides(row.scheduleOverrides),
+    rewards,
     rewardLikeLabel: row.rewardLike?.label ?? null,
     rewardLike: undefined,
+    taskRewards: undefined,
   };
+}
+
+async function buildLikeLabelsMap(
+  userId: string,
+  rows: Array<{
+    taskRewards?: unknown;
+    rewardKind: TaskRewardKind;
+    tier: RewardTier | null;
+    rewardLikeId: string | null;
+    customRewardLabel: string | null;
+  }>
+): Promise<Map<string, string>> {
+  const likeIds = new Set<string>();
+  for (const row of rows) {
+    const legacy = {
+      rewardKind: row.rewardKind,
+      tier: row.tier,
+      rewardLikeId: row.rewardLikeId,
+      customRewardLabel: row.customRewardLabel,
+    };
+    for (const id of collectLikeIdsFromRewards(resolveTaskRewards(row.taskRewards, legacy))) {
+      likeIds.add(id);
+    }
+  }
+  if (likeIds.size === 0) return new Map();
+
+  const likes = await prisma.userReward.findMany({
+    where: { userId, id: { in: [...likeIds] } },
+    select: { id: true, label: true },
+  });
+  return new Map(likes.map((like) => [like.id, like.label]));
 }
 
 async function resolveTaskRewardFromBody(
   userId: string,
   body: {
+    rewards?: z.infer<typeof milestoneRewardSchema>[];
     rewardKind?: TaskRewardKind;
     tier?: RewardTier | null;
     rewardLikeId?: string | null;
@@ -177,6 +247,19 @@ async function resolveTaskRewardFromBody(
     customRewardLabel: string | null;
   }
 ) {
+  if (body.rewards !== undefined) {
+    const rewards = parseTaskRewards(body.rewards);
+    const validationError = validateTaskRewardsList(rewards);
+    if (validationError) throw new Error(validationError);
+
+    const likeError = await validateTaskRewardsLikes(userId, rewards, (id) =>
+      prisma.userReward.findFirst({ where: { id }, select: { userId: true } })
+    );
+    if (likeError) throw new Error(likeError);
+
+    return storageFromTaskRewards(rewards);
+  }
+
   const reward = normalizeTaskRewardInput({
     rewardKind: body.rewardKind ?? existing?.rewardKind ?? TaskRewardKind.Token,
     tier:
@@ -203,7 +286,8 @@ async function resolveTaskRewardFromBody(
     if (likeError) throw new Error(likeError);
   }
 
-  return taskRewardStorageFields(reward);
+  const legacyStorage = taskRewardStorageFields(reward);
+  return storageFromTaskRewards(taskRewardsFromLegacy(legacyStorage));
 }
 
 tasksRouter.get("/", async (req: AuthedRequest, res) => {
@@ -212,7 +296,8 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
     include: { rewardLike: { select: { label: true } } },
     orderBy: [{ section: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
   });
-  res.json({ tasks: rows.map(serializeTask) });
+  const likeLabelsById = await buildLikeLabelsMap(req.user!.userId, rows);
+  res.json({ tasks: rows.map((row) => serializeTask(row, likeLabelsById)) });
 });
 
 /** New task grants +1 Bronze token (source: task_create). */
@@ -231,6 +316,7 @@ tasksRouter.post("/", async (req: AuthedRequest, res) => {
           name: body.name.trim(),
           section,
           ...rewardFields,
+          taskRewards: toJsonTaskRewards(parseTaskRewards(rewardFields.taskRewards)),
           scheduledAt: schedule.scheduledAt,
           durationMinutes: schedule.durationMinutes,
           dueAt: schedule.dueAt,
@@ -253,8 +339,9 @@ tasksRouter.post("/", async (req: AuthedRequest, res) => {
       return { task, token };
     });
 
+    const likeLabelsById = await buildLikeLabelsMap(req.user!.userId, [result.task]);
     res.status(201).json({
-      task: serializeTask(result.task),
+      task: serializeTask(result.task, likeLabelsById),
       token: { id: result.token.id, tier: result.token.tier },
     });
   } catch (e) {
@@ -305,7 +392,12 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
         data: { scheduleOverrides: toJsonOverrides(scheduleOverrides) },
         include: { rewardLike: { select: { label: true } } },
       });
-      res.json({ task: serializeTask(task) });
+      res.json({
+        task: serializeTask(
+          task,
+          await buildLikeLabelsMap(req.user!.userId, [existing, task])
+        ),
+      });
       return;
     }
 
@@ -321,6 +413,7 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
       body.recurrenceConfig !== undefined;
 
     const rewardTouched =
+      body.rewards !== undefined ||
       body.rewardKind !== undefined ||
       body.tier !== undefined ||
       body.rewardLikeId !== undefined ||
@@ -367,7 +460,10 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
       where: { id: existing.id },
       data: {
         ...(body.name !== undefined && { name: body.name.trim() }),
-        ...(rewardFields && rewardFields),
+        ...(rewardFields && {
+          ...rewardFields,
+          taskRewards: toJsonTaskRewards(parseTaskRewards(rewardFields.taskRewards)),
+        }),
         ...(body.section !== undefined && { section: nextSection }),
         ...(sectionChanged && {
           sortOrder: await nextSortOrder(req.user!.userId, nextSection),
@@ -388,7 +484,8 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
       },
       include: { rewardLike: { select: { label: true } } },
     });
-    res.json({ task: serializeTask(task) });
+    const likeLabelsById = await buildLikeLabelsMap(req.user!.userId, [existing, task]);
+    res.json({ task: serializeTask(task, likeLabelsById) });
   } catch (e) {
     const err = e as Error;
     res.status(400).json({ error: err.message });
@@ -442,42 +539,54 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
         )
       : { scheduledAt: task.scheduledAt, dueAt: task.dueAt };
 
-  const grant = resolveTaskRewardGrant(
-    task.rewardKind,
-    task.tier,
-    task.rewardLike?.label ?? null,
-    task.customRewardLabel
-  );
+  const legacy = {
+    rewardKind: task.rewardKind,
+    tier: task.tier,
+    rewardLikeId: task.rewardLikeId,
+    customRewardLabel: task.customRewardLabel,
+  };
+  const resolvedRewards = resolveTaskRewards(task.taskRewards, legacy);
+  const likeIds = collectLikeIdsFromRewards(resolvedRewards);
 
   const result = await prisma.$transaction(async (tx) => {
-    let token: { id: string; tier: RewardTier } | null = null;
-    let definiteReward: { label: string } | null = null;
+    const tokens: { id: string; tier: RewardTier }[] = [];
+    const definiteRewards: { label: string }[] = [];
 
-    if (grant.type === "token") {
-      const created = await tx.rewardToken.create({
-        data: {
-          userId: req.user!.userId,
-          tier: grant.tier,
-          source: "task_achieve",
-        },
+    const likesById = new Map<string, { tier: RewardTier; label: string }>();
+    if (likeIds.length > 0) {
+      const likes = await tx.userReward.findMany({
+        where: { userId: req.user!.userId, id: { in: likeIds } },
+        select: { id: true, tier: true, label: true },
       });
-      token = { id: created.id, tier: created.tier };
-    } else if (grant.type === "definite") {
-      definiteReward = { label: grant.label };
-      if (task.rewardKind === TaskRewardKind.Like && task.rewardLikeId) {
-        const like = await tx.userReward.findFirst({
-          where: { id: task.rewardLikeId, userId: req.user!.userId },
-          select: { tier: true },
+      for (const like of likes) {
+        likesById.set(like.id, { tier: like.tier, label: like.label });
+      }
+    }
+
+    for (const reward of resolvedRewards) {
+      if (reward.kind === "token") {
+        const created = await tx.rewardToken.create({
+          data: {
+            userId: req.user!.userId,
+            tier: reward.tier,
+            source: "task_achieve",
+          },
         });
+        tokens.push({ id: created.id, tier: created.tier });
+      } else if (reward.kind === "like") {
+        const like = likesById.get(reward.likeId);
         if (like) {
           await logLikeGrant(
             tx,
             req.user!.userId,
-            task.rewardLikeId,
+            reward.likeId,
             like.tier,
             "task_achieve"
           );
+          definiteRewards.push({ label: like.label });
         }
+      } else if (reward.kind === "custom") {
+        definiteRewards.push({ label: reward.label });
       }
     }
 
@@ -492,7 +601,7 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
       include: { rewardLike: { select: { label: true } } },
     });
 
-    return { token, definiteReward, task: updated };
+    return { tokens, definiteRewards, task: updated };
   });
 
   const { bonusTokens, bonusRewards } = await evaluateAchievementBonuses(
@@ -502,10 +611,13 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
     [{ taskId: task.id, scheduledAt: preAchieveScheduledAt }]
   );
 
+  const likeLabelsById = await buildLikeLabelsMap(req.user!.userId, [result.task]);
   res.json({
-    task: serializeTask(result.task),
-    token: result.token,
-    definiteReward: result.definiteReward,
+    task: serializeTask(result.task, likeLabelsById),
+    tokens: result.tokens,
+    definiteRewards: result.definiteRewards,
+    token: result.tokens[0] ?? null,
+    definiteReward: result.definiteRewards[0] ?? null,
     bonusTokens,
     bonusRewards,
   });

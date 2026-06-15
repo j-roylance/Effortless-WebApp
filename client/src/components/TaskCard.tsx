@@ -6,7 +6,7 @@ import {
   isTaskAchievedToday,
   recurrenceSummary,
 } from "../domain/recurrence";
-import { rewardSummary } from "../domain/rewards";
+import { rewardSummaries } from "../domain/task-rewards";
 import { TierBadge } from "./TierBadge";
 
 export function TaskCard({
@@ -22,20 +22,26 @@ export function TaskCard({
 }) {
   const repeatLabel = recurrenceSummary(task.recurrence, task.recurrenceConfig);
   const achievedToday = isTaskAchievedToday(task.achievedAt);
-  const rewardLabel = rewardSummary(
-    task.rewardKind,
-    task.tier,
-    task.rewardLikeLabel,
-    task.customRewardLabel
-  );
+  const rewards = task.rewards ?? [];
+  const summaries = rewardSummaries(rewards);
 
   return (
     <article className={`task-card neon-card${pastDue ? " task-card--past-due" : ""}`}>
       <div className="task-card-header">
         <div>
           <h4 style={{ margin: "0 0 0.35rem", fontSize: "1.1rem" }}>{task.name}</h4>
-          {task.rewardKind === "Token" && task.tier ? (
-            <TierBadge tier={task.tier} />
+          {rewards.length > 0 ? (
+            <div className="task-reward-badges">
+              {rewards.map((reward, index) =>
+                reward.kind === "token" ? (
+                  <TierBadge key={`${task.id}-token-${index}`} tier={reward.tier} />
+                ) : (
+                  <span key={`${task.id}-reward-${index}`} className="task-reward-chip">
+                    {summaries[index]}
+                  </span>
+                )
+              )}
+            </div>
           ) : (
             <span
               style={{
@@ -44,7 +50,7 @@ export function TaskCard({
                 fontFamily: "var(--font-display)",
               }}
             >
-              {rewardLabel}
+              No reward
             </span>
           )}
           {!task.persistAfterDone && (

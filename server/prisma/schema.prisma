@@ -81,6 +81,7 @@ model Habit {
   tier             RewardTier?
   rewardLikeId     String?
   customRewardLabel String?
+  taskRewards       Json?
   section          TaskSection    @default(Could)
   scheduledAt      DateTime?
   durationMinutes  Int?

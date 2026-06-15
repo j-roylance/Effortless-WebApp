@@ -4,9 +4,11 @@ import type { RewardTier } from "../domain/tiers";
 
 export function rewardsFromAchieve(data: AchieveResult): RewardQueueItem[] {
   const items: RewardQueueItem[] = [];
-  if (data.token) items.push({ type: "token", tier: data.token.tier });
-  if (data.definiteReward) {
-    items.push({ type: "definite", label: data.definiteReward.label });
+  for (const token of data.tokens ?? (data.token ? [data.token] : [])) {
+    items.push({ type: "token", tier: token.tier });
+  }
+  for (const reward of data.definiteRewards ?? (data.definiteReward ? [data.definiteReward] : [])) {
+    items.push({ type: "definite", label: reward.label });
   }
   for (const bonus of data.bonusTokens ?? []) {
     items.push({

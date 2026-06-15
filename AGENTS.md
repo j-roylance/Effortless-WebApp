@@ -32,7 +32,7 @@ Grep hits for `habit` in old token `source` values are expected.
 | Token earn modals | `useRewardQueue`, `RewardModalHost` |
 | Spin UI / animations | `RandomizerModal`, `OutcomeRoll`, `SpinnerWheel`, `client/src/domain/spin.ts` |
 | Calendar / repeat overrides | `client/src/domain/calendar.ts`, `schedule-overrides.ts`, `PATCH /tasks/:id` with `occurrenceDayKey` |
-| Task / daily rewards | `rewardKind` on `Habit`, `planningReward` JSON on `DailySettings`, `client/src/components/RewardPicker.tsx` |
+| Task / daily rewards | `rewardKind` on `Habit`, `taskRewards` JSON, `TaskRewardsEditor`, `RewardPicker` |
 | Like split/combine ratios | `server/src/domain/like-conversions.ts` **and** `client/src/domain/like-conversions.ts` |
 | Like usage / ledger | `server/src/services/like-tracking.ts`, `LikeCreditLedger` model |
 | Like split/combine UI | `LikeSplitModal`, `LikeCombineModal`, `LikesPage` |
@@ -42,8 +42,8 @@ Grep hits for `habit` in old token `source` values are expected.
 
 | Path | Page | Main API |
 |------|------|----------|
-| `/` | TasksPage | `GET /tasks`, `POST /tasks/:id/achieve` |
-| `/tasks/new`, `/tasks/:id/edit` | TaskFormPage | `POST/PATCH/DELETE /tasks` |
+| `/` | TasksPage | `GET /tasks`, `POST /tasks/:id/achieve` (multi-reward via `rewards` / `tokens[]`) |
+| `/tasks/new`, `/tasks/:id/edit` | TaskFormPage | `POST/PATCH /tasks` with `rewards[]` |
 | `/calendar` | CalendarPage | `GET /tasks`, `PATCH /tasks/:id` |
 | `/likes` | LikesPage | `GET /likes` (with `rewardedCount`/`usedCount`/`availableCount`), `PATCH /likes/:id/used`, `POST /likes/:id/split`, `POST /likes/combine`, `POST /likes/reset-tier` |
 | `/daily-settings` | Settings (DailySettingsPage) | `GET/PUT /daily-settings` |

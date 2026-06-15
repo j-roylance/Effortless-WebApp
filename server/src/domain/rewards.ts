@@ -41,6 +41,169 @@ export function milestoneRewardToJson(
   return { kind: "custom", label: reward.label };
 }
 
+export type ActiveMilestoneReward = Exclude<MilestoneReward, { kind: "none" }>;
+
+export function parseTaskRewards(value: unknown): ActiveMilestoneReward[] {
+  if (!Array.isArray(value)) return [];
+  const rewards: ActiveMilestoneReward[] = [];
+  for (const entry of value) {
+    const parsed = parseMilestoneReward(entry);
+    if (parsed.kind !== "none") rewards.push(parsed);
+  }
+  return rewards;
+}
+
+export function taskRewardsToJson(
+  rewards: ActiveMilestoneReward[]
+): Array<Record<string, string>> {
+  return rewards.map((reward) => milestoneRewardToJson(reward) as Record<string, string>);
+}
+
+export interface LegacyTaskRewardFields {
+  rewardKind: TaskRewardKind;
+  tier: RewardTier | null;
+  rewardLikeId: string | null;
+  customRewardLabel: string | null;
+}
+
+export function taskRewardsFromLegacy(fields: LegacyTaskRewardFields): ActiveMilestoneReward[] {
+  if (fields.rewardKind === TaskRewardKind.None) return [];
+  if (fields.rewardKind === TaskRewardKind.Token && fields.tier) {
+    return [{ kind: "token", tier: fields.tier }];
+  }
+  if (fields.rewardKind === TaskRewardKind.Like && fields.rewardLikeId) {
+    return [{ kind: "like", likeId: fields.rewardLikeId }];
+  }
+  if (fields.rewardKind === TaskRewardKind.Custom && fields.customRewardLabel) {
+    return [{ kind: "custom", label: fields.customRewardLabel }];
+  }
+  return [];
+}
+
+export function resolveTaskRewards(
+  taskRewards: unknown,
+  legacy: LegacyTaskRewardFields
+): ActiveMilestoneReward[] {
+  const fromJson = parseTaskRewards(taskRewards);
+  if (fromJson.length > 0) return fromJson;
+  return taskRewardsFromLegacy(legacy);
+}
+
+export function milestoneRewardToTaskInput(reward: ActiveMilestoneReward): TaskRewardInput {
+  if (reward.kind === "token") {
+    return {
+      rewardKind: TaskRewardKind.Token,
+      tier: reward.tier,
+      rewardLikeId: null,
+      customRewardLabel: null,
+    };
+  }
+  if (reward.kind === "like") {
+    return {
+      rewardKind: TaskRewardKind.Like,
+      tier: null,
+      rewardLikeId: reward.likeId,
+      customRewardLabel: null,
+    };
+  }
+  return {
+    rewardKind: TaskRewardKind.Custom,
+    tier: null,
+    rewardLikeId: null,
+    customRewardLabel: reward.label,
+  };
+}
+
+export function validateTaskRewardsList(rewards: ActiveMilestoneReward[]): string | null {
+  for (const reward of rewards) {
+    const error = validateTaskRewardFields(milestoneRewardToTaskInput(reward));
+    if (error) return error;
+  }
+  return null;
+}
+
+export async function validateTaskRewardsLikes(
+  userId: string,
+  rewards: ActiveMilestoneReward[],
+  findLike: (id: string) => Promise<{ userId: string } | null>
+): Promise<string | null> {
+  for (const reward of rewards) {
+    if (reward.kind !== "like") continue;
+    const error = await validateTaskRewardLike(userId, reward.likeId, findLike);
+    if (error) return error;
+  }
+  return null;
+}
+
+export function storageFromTaskRewards(rewards: ActiveMilestoneReward[]): {
+  taskRewards: Array<Record<string, string>>;
+  rewardKind: TaskRewardKind;
+  tier: RewardTier | null;
+  rewardLikeId: string | null;
+  customRewardLabel: string | null;
+} {
+  const primary = rewards[0];
+  const legacy = primary
+    ? taskRewardStorageFields(milestoneRewardToTaskInput(primary))
+    : taskRewardStorageFields({
+        rewardKind: TaskRewardKind.None,
+        tier: null,
+        rewardLikeId: null,
+        customRewardLabel: null,
+      });
+
+  return {
+    taskRewards: taskRewardsToJson(rewards),
+    ...legacy,
+  };
+}
+
+export function collectLikeIdsFromRewards(rewards: ActiveMilestoneReward[]): string[] {
+  const ids = new Set<string>();
+  for (const reward of rewards) {
+    if (reward.kind === "like") ids.add(reward.likeId);
+  }
+  return [...ids];
+}
+
+export function resolveTaskRewardGrants(
+  rewards: ActiveMilestoneReward[],
+  likeLabelsById: Map<string, string>
+): Array<Exclude<RewardGrant, { type: "none" }>> {
+  const grants: Array<Exclude<RewardGrant, { type: "none" }>> = [];
+  for (const reward of rewards) {
+    if (reward.kind === "token") {
+      grants.push({ type: "token", tier: reward.tier });
+      continue;
+    }
+    if (reward.kind === "like") {
+      const label = likeLabelsById.get(reward.likeId);
+      if (label) grants.push({ type: "definite", label });
+      continue;
+    }
+    grants.push({ type: "definite", label: reward.label });
+  }
+  return grants;
+}
+
+export type TaskRewardEntry =
+  | { kind: "token"; tier: RewardTier }
+  | { kind: "like"; likeId: string; likeLabel?: string }
+  | { kind: "custom"; label: string };
+
+export function enrichTaskRewards(
+  rewards: ActiveMilestoneReward[],
+  likeLabelsById: Map<string, string>
+): TaskRewardEntry[] {
+  return rewards.map((reward) => {
+    if (reward.kind === "like") {
+      const likeLabel = likeLabelsById.get(reward.likeId);
+      return likeLabel ? { ...reward, likeLabel } : reward;
+    }
+    return reward;
+  });
+}
+
 export interface TaskRewardInput {
   rewardKind: TaskRewardKind;
   tier: RewardTier | null;

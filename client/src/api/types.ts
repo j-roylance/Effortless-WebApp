@@ -8,6 +8,11 @@ export interface User {
   email: string;
 }
 
+export type TaskRewardEntry =
+  | { kind: "token"; tier: RewardTier }
+  | { kind: "like"; likeId: string; likeLabel?: string }
+  | { kind: "custom"; label: string };
+
 /** Task (stored as Habit in the database). */
 export interface Task {
   id: string;
@@ -17,6 +22,7 @@ export interface Task {
   rewardLikeId: string | null;
   customRewardLabel: string | null;
   rewardLikeLabel?: string | null;
+  rewards: TaskRewardEntry[];
   section: TaskSection;
   scheduledAt: string | null;
   durationMinutes: number | null;
@@ -103,6 +109,8 @@ export interface BonusReward {
 
 export interface AchieveResult {
   task: Task;
+  tokens: { id: string; tier: RewardTier }[];
+  definiteRewards: { label: string }[];
   token: { id: string; tier: RewardTier } | null;
   definiteReward?: { label: string } | null;
   bonusTokens?: BonusToken[];

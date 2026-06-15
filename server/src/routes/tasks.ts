@@ -548,6 +548,20 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
   const resolvedRewards = resolveTaskRewards(task.taskRewards, legacy);
   const likeIds = collectLikeIdsFromRewards(resolvedRewards);
 
+  if (likeIds.length > 0) {
+    const existingLikes = await prisma.userReward.findMany({
+      where: { userId: req.user!.userId, id: { in: likeIds } },
+      select: { id: true },
+    });
+    const found = new Set(existingLikes.map((l) => l.id));
+    for (const reward of resolvedRewards) {
+      if (reward.kind === "like" && !found.has(reward.likeId)) {
+        res.status(400).json({ error: "Task references a like that no longer exists" });
+        return;
+      }
+    }
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     const tokens: { id: string; tier: RewardTier }[] = [];
     const definiteRewards: { label: string }[] = [];
@@ -574,17 +588,15 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
         });
         tokens.push({ id: created.id, tier: created.tier });
       } else if (reward.kind === "like") {
-        const like = likesById.get(reward.likeId);
-        if (like) {
-          await logLikeGrant(
-            tx,
-            req.user!.userId,
-            reward.likeId,
-            like.tier,
-            "task_achieve"
-          );
-          definiteRewards.push({ label: like.label });
-        }
+        const like = likesById.get(reward.likeId)!;
+        await logLikeGrant(
+          tx,
+          req.user!.userId,
+          reward.likeId,
+          like.tier,
+          "task_achieve"
+        );
+        definiteRewards.push({ label: like.label });
       } else if (reward.kind === "custom") {
         definiteRewards.push({ label: reward.label });
       }

@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { parseTaskRewards } from "../domain/rewards.js";
 import {
   AI_RECOVERY_GUIDE,
   BACKUP_FORMAT,
@@ -164,10 +165,33 @@ export async function exportAccountBackup(
   };
 }
 
-function parseDate(value: string | null): Date | null {
+function parseOptionalDate(value: string | null, field: string): Date | null {
   if (!value) return null;
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(`Invalid date for ${field}: ${value}`);
+  }
+  return d;
+}
+
+function parseRequiredDate(value: string, field: string): Date {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(`Invalid date for ${field}: ${value}`);
+  }
+  return d;
+}
+
+function validateLikeReferences(
+  likeIds: Set<string>,
+  rows: { likeId: string }[],
+  label: string
+): void {
+  for (const row of rows) {
+    if (!likeIds.has(row.likeId)) {
+      throw new Error(`${label} references unknown like ${row.likeId}`);
+    }
+  }
 }
 
 async function deleteAllUserData(tx: Prisma.TransactionClient, userId: string) {
@@ -198,7 +222,15 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
     if (task.rewardLikeId && !likeIds.has(task.rewardLikeId)) {
       throw new Error(`Task "${task.name}" references unknown like ${task.rewardLikeId}`);
     }
+    for (const reward of parseTaskRewards(task.taskRewards)) {
+      if (reward.kind === "like" && !likeIds.has(reward.likeId)) {
+        throw new Error(`Task "${task.name}" taskRewards references unknown like ${reward.likeId}`);
+      }
+    }
   }
+  validateLikeReferences(likeIds, data.likeUsedCounts, "Like used count");
+  validateLikeReferences(likeIds, data.likeGrantLogs, "Like grant log");
+  validateLikeReferences(likeIds, data.likeCreditLedger, "Like credit ledger");
   for (const goal of data.goals) {
     if (!visionIds.has(goal.visionId)) {
       throw new Error(`Goal "${goal.name}" references unknown vision ${goal.visionId}`);
@@ -218,7 +250,7 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           userId,
           tier: row.tier as import("@prisma/client").RewardTier,
           label: row.label,
-          createdAt: new Date(row.createdAt),
+          createdAt: parseRequiredDate(row.createdAt, "like.createdAt"),
         })),
       });
     }
@@ -230,8 +262,8 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           userId,
           name: row.name,
           sortOrder: row.sortOrder,
-          archivedAt: parseDate(row.archivedAt),
-          createdAt: new Date(row.createdAt),
+          archivedAt: parseOptionalDate(row.archivedAt, "vision.archivedAt"),
+          createdAt: parseRequiredDate(row.createdAt, "vision.createdAt"),
         })),
       });
     }
@@ -255,8 +287,8 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
             visionId: row.visionId,
             name: row.name,
             sortOrder: row.sortOrder,
-            completedAt: parseDate(row.completedAt),
-            createdAt: new Date(row.createdAt),
+            completedAt: parseOptionalDate(row.completedAt, "goal.completedAt"),
+            createdAt: parseRequiredDate(row.createdAt, "goal.createdAt"),
             parentGoalId: row.parentGoalId,
           },
         });
@@ -283,9 +315,9 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
               ? undefined
               : (row.taskRewards as Prisma.InputJsonValue),
           section: row.section as import("@prisma/client").TaskSection,
-          scheduledAt: parseDate(row.scheduledAt),
+          scheduledAt: parseOptionalDate(row.scheduledAt, "task.scheduledAt"),
           durationMinutes: row.durationMinutes,
-          dueAt: parseDate(row.dueAt),
+          dueAt: parseOptionalDate(row.dueAt, "task.dueAt"),
           recurrence: row.recurrence as import("@prisma/client").TaskRecurrence,
           recurrenceConfig:
             row.recurrenceConfig === null || row.recurrenceConfig === undefined
@@ -297,9 +329,9 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
               : (row.scheduleOverrides as Prisma.InputJsonValue),
           persistAfterDone: row.persistAfterDone,
           sortOrder: row.sortOrder,
-          achievedAt: parseDate(row.achievedAt),
-          archivedAt: parseDate(row.archivedAt),
-          createdAt: new Date(row.createdAt),
+          achievedAt: parseOptionalDate(row.achievedAt, "task.achievedAt"),
+          archivedAt: parseOptionalDate(row.archivedAt, "task.archivedAt"),
+          createdAt: parseRequiredDate(row.createdAt, "task.createdAt"),
         },
       });
     }
@@ -312,7 +344,7 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           allMustsReward: data.dailySettings.allMustsReward as Prisma.InputJsonValue,
           allDoDatesReward: data.dailySettings.allDoDatesReward as Prisma.InputJsonValue,
           spinOutcomeWeights: data.dailySettings.spinOutcomeWeights as Prisma.InputJsonValue,
-          updatedAt: new Date(data.dailySettings.updatedAt),
+          updatedAt: parseRequiredDate(data.dailySettings.updatedAt, "dailySettings.updatedAt"),
         },
       });
     }
@@ -325,8 +357,7 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           tier: row.tier as import("@prisma/client").RewardTier,
           multiplier: row.multiplier,
           sliceCounts: row.sliceCounts as Prisma.InputJsonValue,
-          createdAt: new Date(row.createdAt),
-          updatedAt: new Date(row.updatedAt),
+          createdAt: parseRequiredDate(row.createdAt, "wheelConfig.createdAt"),
         })),
       });
     }
@@ -338,8 +369,8 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           userId,
           tier: row.tier as import("@prisma/client").RewardTier,
           source: row.source,
-          spentAt: parseDate(row.spentAt),
-          createdAt: new Date(row.createdAt),
+          spentAt: parseOptionalDate(row.spentAt, "token.spentAt"),
+          createdAt: parseRequiredDate(row.createdAt, "token.createdAt"),
         })),
       });
     }
@@ -353,7 +384,7 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           outcome: row.outcome as import("@prisma/client").SpinOutcome,
           effectiveTier: row.effectiveTier as import("@prisma/client").RewardTier,
           rewardId: row.rewardId,
-          createdAt: new Date(row.createdAt),
+          createdAt: parseRequiredDate(row.createdAt, "spinLog.createdAt"),
         })),
       });
     }
@@ -377,7 +408,7 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           userId,
           tier: row.tier as import("@prisma/client").RewardTier,
           bucketKey: row.bucketKey,
-          resetAt: new Date(row.resetAt),
+          resetAt: parseRequiredDate(row.resetAt, "tierLikeReset.resetAt"),
         })),
       });
     }
@@ -390,7 +421,7 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           likeId: row.likeId,
           tier: row.tier as import("@prisma/client").RewardTier,
           source: row.source,
-          createdAt: new Date(row.createdAt),
+          createdAt: parseRequiredDate(row.createdAt, "likeGrantLog.createdAt"),
         })),
       });
     }
@@ -404,7 +435,7 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           bucketKey: row.bucketKey,
           delta: row.delta,
           kind: row.kind,
-          createdAt: new Date(row.createdAt),
+          createdAt: parseRequiredDate(row.createdAt, "likeCreditLedger.createdAt"),
         })),
       });
     }
@@ -418,7 +449,7 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           bonusType: row.bonusType,
           tier: row.tier as import("@prisma/client").RewardTier | null,
           rewardLabel: row.rewardLabel,
-          createdAt: new Date(row.createdAt),
+          createdAt: parseRequiredDate(row.createdAt, "dailyBonusClaim.createdAt"),
         })),
       });
     }

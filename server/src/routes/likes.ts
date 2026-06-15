@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { isValidTier } from "../domain/tiers.js";
+import { safeTimeZone } from "../domain/daily.js";
 import {
   adjustLikeUsedCount,
   combineLikeCredits,
@@ -53,7 +54,7 @@ likesRouter.get("/", async (req: AuthedRequest, res) => {
     return;
   }
 
-  const timeZone = String(req.headers["x-timezone"] ?? "UTC");
+  const timeZone = safeTimeZone(String(req.headers["x-timezone"] ?? "UTC"));
   const { likes, trackingByTier } = await likesWithTracking(
     req.user!.userId,
     timeZone,
@@ -66,7 +67,7 @@ likesRouter.get("/", async (req: AuthedRequest, res) => {
 likesRouter.post("/reset-tier", async (req: AuthedRequest, res) => {
   try {
     const body = resetTierSchema.parse(req.body);
-    const timeZone = String(req.headers["x-timezone"] ?? "UTC");
+    const timeZone = safeTimeZone(String(req.headers["x-timezone"] ?? "UTC"));
     await resetTierLikeTracking(req.user!.userId, body.tier, timeZone);
     res.json({ ok: true });
   } catch (e) {
@@ -95,7 +96,7 @@ likesRouter.post("/", async (req: AuthedRequest, res) => {
 likesRouter.post("/combine", async (req: AuthedRequest, res) => {
   try {
     const body = combineBodySchema.parse(req.body);
-    const timeZone = String(req.headers["x-timezone"] ?? "UTC");
+    const timeZone = safeTimeZone(String(req.headers["x-timezone"] ?? "UTC"));
     await combineLikeCredits(
       req.user!.userId,
       body.targetLikeId,
@@ -113,7 +114,7 @@ likesRouter.post("/:id/split", async (req: AuthedRequest, res) => {
   try {
     const likeId = String(req.params.id);
     const body = splitBodySchema.parse(req.body);
-    const timeZone = String(req.headers["x-timezone"] ?? "UTC");
+    const timeZone = safeTimeZone(String(req.headers["x-timezone"] ?? "UTC"));
     await splitLikeCredit(req.user!.userId, likeId, body.allocations, timeZone);
     res.json({ ok: true });
   } catch (e) {
@@ -126,7 +127,7 @@ likesRouter.patch("/:id/used", async (req: AuthedRequest, res) => {
   try {
     const likeId = String(req.params.id);
     const body = usedBodySchema.parse(req.body);
-    const timeZone = String(req.headers["x-timezone"] ?? "UTC");
+    const timeZone = safeTimeZone(String(req.headers["x-timezone"] ?? "UTC"));
     const result = await adjustLikeUsedCount(
       req.user!.userId,
       likeId,

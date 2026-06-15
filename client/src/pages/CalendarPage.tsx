@@ -123,6 +123,7 @@ export function CalendarPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
+      queryClient.invalidateQueries({ queryKey: ["likes"] });
       enqueueReward(rewardsFromAchieve(data));
     },
     onError: (err: Error) => setToast(err.message),

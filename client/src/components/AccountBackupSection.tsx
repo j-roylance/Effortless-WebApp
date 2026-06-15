@@ -79,7 +79,14 @@ export function AccountBackupSection() {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      await queryClient.invalidateQueries();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+        queryClient.invalidateQueries({ queryKey: ["tokens"] }),
+        queryClient.invalidateQueries({ queryKey: ["likes"] }),
+        queryClient.invalidateQueries({ queryKey: ["visions"] }),
+        queryClient.invalidateQueries({ queryKey: ["daily-settings"] }),
+        queryClient.invalidateQueries({ queryKey: ["wheel-config"] }),
+      ]);
       setMessage("Backup restored successfully.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");

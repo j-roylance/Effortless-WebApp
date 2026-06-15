@@ -42,7 +42,7 @@ Grep hits for `habit` in old token `source` values are expected.
 | `/` | TasksPage | `GET /tasks`, `POST /tasks/:id/achieve` |
 | `/tasks/new`, `/tasks/:id/edit` | TaskFormPage | `POST/PATCH/DELETE /tasks` |
 | `/calendar` | CalendarPage | `GET /tasks`, `PATCH /tasks/:id` |
-| `/likes` | LikesPage | `GET /likes`, `POST /spin` |
+| `/likes` | LikesPage | `GET /likes` (with `rewardedCount`/`usedCount`), `PATCH /likes/:id/used`, `POST /likes/reset-tier` |
 | `/daily-settings` | Settings (DailySettingsPage) | `GET/PUT /daily-settings` |
 | `/visions` | VisionsPage | `GET /visions` |
 | `/visions/:id/chain` | VisionChainPage | `GET/POST/PATCH /visions/:id/goals` (top-level goals) |

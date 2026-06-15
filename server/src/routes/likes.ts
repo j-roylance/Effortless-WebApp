@@ -3,6 +3,11 @@ import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { isValidTier } from "../domain/tiers.js";
+import {
+  adjustLikeUsedCount,
+  likesWithTracking,
+  resetTierLikeTracking,
+} from "../services/like-tracking.js";
 
 export const likesRouter = Router();
 likesRouter.use(requireAuth);
@@ -12,23 +17,46 @@ const likeBodySchema = z.object({
   label: z.string().min(1).max(500),
 });
 
+const usedBodySchema = z
+  .object({
+    delta: z.union([z.literal(1), z.literal(-1)]).optional(),
+    usedCount: z.number().int().min(0).optional(),
+  })
+  .refine((b) => b.delta !== undefined || b.usedCount !== undefined, {
+    message: "Provide delta or usedCount",
+  });
+
+const resetTierSchema = z.object({
+  tier: z.string().refine(isValidTier, { message: "Invalid tier" }),
+});
+
 likesRouter.get("/", async (req: AuthedRequest, res) => {
   const tier = req.query.tier as string | undefined;
-  const where: { userId: string; tier?: import("@prisma/client").RewardTier } = {
-    userId: req.user!.userId,
-  };
-  if (tier) {
-    if (!isValidTier(tier)) {
-      res.status(400).json({ error: "Invalid tier" });
-      return;
-    }
-    where.tier = tier;
+  if (tier && !isValidTier(tier)) {
+    res.status(400).json({ error: "Invalid tier" });
+    return;
   }
-  const likes = await prisma.userReward.findMany({
-    where,
-    orderBy: [{ tier: "asc" }, { createdAt: "asc" }],
-  });
-  res.json({ likes });
+
+  const timeZone = String(req.headers["x-timezone"] ?? "UTC");
+  const { likes, trackingByTier } = await likesWithTracking(
+    req.user!.userId,
+    timeZone,
+    tier as import("@prisma/client").RewardTier | undefined
+  );
+
+  res.json({ likes, trackingByTier });
+});
+
+likesRouter.post("/reset-tier", async (req: AuthedRequest, res) => {
+  try {
+    const body = resetTierSchema.parse(req.body);
+    const timeZone = String(req.headers["x-timezone"] ?? "UTC");
+    await resetTierLikeTracking(req.user!.userId, body.tier, timeZone);
+    res.json({ ok: true });
+  } catch (e) {
+    const err = e as Error;
+    res.status(400).json({ error: err.message });
+  }
 });
 
 likesRouter.post("/", async (req: AuthedRequest, res) => {
@@ -45,6 +73,25 @@ likesRouter.post("/", async (req: AuthedRequest, res) => {
   } catch (e) {
     const err = e as Error;
     res.status(400).json({ error: err.message });
+  }
+});
+
+likesRouter.patch("/:id/used", async (req: AuthedRequest, res) => {
+  try {
+    const likeId = String(req.params.id);
+    const body = usedBodySchema.parse(req.body);
+    const timeZone = String(req.headers["x-timezone"] ?? "UTC");
+    const result = await adjustLikeUsedCount(
+      req.user!.userId,
+      likeId,
+      timeZone,
+      body.delta,
+      body.usedCount
+    );
+    res.json(result);
+  } catch (e) {
+    const err = e as Error & { status?: number };
+    res.status(err.status ?? 400).json({ error: err.message });
   }
 });
 

@@ -25,6 +25,7 @@ import {
 } from "../domain/rewards.js";
 import { dayKeyForTimezone, isSameDayInTimezone, safeTimeZone } from "../domain/daily.js";
 import { evaluateAchievementBonuses } from "../services/daily-rewards.js";
+import { logLikeGrant } from "../services/like-tracking.js";
 
 export const tasksRouter = Router();
 tasksRouter.use(requireAuth);
@@ -463,6 +464,21 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
       token = { id: created.id, tier: created.tier };
     } else if (grant.type === "definite") {
       definiteReward = { label: grant.label };
+      if (task.rewardKind === TaskRewardKind.Like && task.rewardLikeId) {
+        const like = await tx.userReward.findFirst({
+          where: { id: task.rewardLikeId, userId: req.user!.userId },
+          select: { tier: true },
+        });
+        if (like) {
+          await logLikeGrant(
+            tx,
+            req.user!.userId,
+            task.rewardLikeId,
+            like.tier,
+            "task_achieve"
+          );
+        }
+      }
     }
 
     const updated = await tx.habit.update({

@@ -12,6 +12,7 @@ import {
   type RewardGrant,
 } from "../domain/rewards.js";
 import { taskOccursOnDay } from "../domain/schedule-overrides.js";
+import { logLikeGrant } from "./like-tracking.js";
 
 export interface BonusToken {
   tier: RewardTier;
@@ -158,6 +159,16 @@ async function claimBonus(
     const err = e as { code?: string };
     if (err.code === "P2002") return null;
     throw e;
+  }
+
+  if (reward.kind === "like") {
+    const like = await tx.userReward.findFirst({
+      where: { id: reward.likeId, userId },
+      select: { tier: true },
+    });
+    if (like) {
+      await logLikeGrant(tx, userId, reward.likeId, like.tier, source);
+    }
   }
 
   return {

@@ -67,6 +67,9 @@ model User {
   dailyBonusClaims DailyBonusClaim[]
   visions        Vision[]
   goals          Goal[]
+  likeUsedCounts LikeUsedCount[]
+  tierLikeResets TierLikeReset[]
+  likeGrantLogs  LikeGrantLog[]
 }
 
 model Habit {
@@ -97,15 +100,54 @@ model Habit {
 }
 
 model UserReward {
+  id             String          @id @default(cuid())
+  userId         String
+  tier           RewardTier
+  label          String
+  createdAt      DateTime        @default(now())
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habits         Habit[]
+  likeUsedCounts LikeUsedCount[]
+  likeGrantLogs  LikeGrantLog[]
+
+  @@index([userId, tier])
+}
+
+model LikeUsedCount {
+  id         String     @id @default(cuid())
+  userId     String
+  likeId     String
+  bucketKey  String
+  usedCount  Int        @default(0)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  like       UserReward @relation(fields: [likeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, likeId, bucketKey])
+  @@index([userId, bucketKey])
+}
+
+model TierLikeReset {
   id        String     @id @default(cuid())
   userId    String
   tier      RewardTier
-  label     String
+  bucketKey String
+  resetAt   DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tier, bucketKey])
+}
+
+model LikeGrantLog {
+  id        String     @id @default(cuid())
+  userId    String
+  likeId    String
+  tier      RewardTier
+  source    String
   createdAt DateTime   @default(now())
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  habits    Habit[]
+  like      UserReward @relation(fields: [likeId], references: [id], onDelete: Cascade)
 
-  @@index([userId, tier])
+  @@index([userId, likeId, createdAt])
 }
 
 model RewardToken {

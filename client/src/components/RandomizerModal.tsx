@@ -87,6 +87,7 @@ export function RandomizerModal({
       setSkipWheel(false);
       setPhase("outcomeRoll");
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
+      queryClient.invalidateQueries({ queryKey: ["likes"] });
     },
   });
 

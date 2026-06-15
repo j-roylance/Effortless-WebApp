@@ -37,6 +37,18 @@ export interface UserLike {
   tier: RewardTier;
   label: string;
   createdAt: string;
+  rewardedCount: number;
+  usedCount: number;
+}
+
+export interface LikeTrackingMeta {
+  bucketKey: string;
+  periodLabel: string;
+}
+
+export interface LikesResponse {
+  likes: UserLike[];
+  trackingByTier: Record<RewardTier, LikeTrackingMeta>;
 }
 
 export interface TokenBalances {

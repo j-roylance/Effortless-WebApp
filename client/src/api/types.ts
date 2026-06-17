@@ -44,6 +44,7 @@ export interface UserLike {
   label: string;
   createdAt: string;
   rewardedCount: number;
+  awardedCount: number;
   usedCount: number;
   ledgerDelta: number;
   availableCount: number;

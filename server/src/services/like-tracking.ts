@@ -1,4 +1,5 @@
 import type { RewardTier, UserReward } from "@prisma/client";
+import { SpinOutcome } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { safeTimeZone } from "../domain/daily.js";
 import {
@@ -30,6 +31,7 @@ export interface LikeWithTracking {
   label: string;
   createdAt: string;
   rewardedCount: number;
+  awardedCount: number;
   usedCount: number;
   ledgerDelta: number;
   availableCount: number;
@@ -59,14 +61,22 @@ async function effectiveStartForTier(
 async function rewardedCountForLike(
   userId: string,
   likeId: string,
+  tier: RewardTier,
   effectiveStart: Date,
   tx: Tx = prisma
 ): Promise<number> {
+  const prizeOutcomes: SpinOutcome[] = [
+    SpinOutcome.Win,
+    SpinOutcome.LevelUp,
+    SpinOutcome.LevelDown,
+  ];
   const [spinCount, grantCount] = await Promise.all([
     tx.spinLog.count({
       where: {
         userId,
         rewardId: likeId,
+        effectiveTier: tier,
+        outcome: { in: prizeOutcomes },
         createdAt: { gte: effectiveStart },
       },
     }),
@@ -79,6 +89,19 @@ async function rewardedCountForLike(
     }),
   ]);
   return spinCount + grantCount;
+}
+
+async function ledgerCreditsForLike(
+  userId: string,
+  likeId: string,
+  bucketKey: string,
+  tx: Tx = prisma
+): Promise<number> {
+  const result = await tx.likeCreditLedger.aggregate({
+    where: { userId, likeId, bucketKey, delta: { gt: 0 } },
+    _sum: { delta: true },
+  });
+  return result._sum.delta ?? 0;
 }
 
 async function ledgerDeltaForLike(
@@ -102,8 +125,15 @@ async function availableForLike(
   now: Date,
   usedByLikeId: Map<string, number>,
   ledgerByLikeId: Map<string, number>,
+  ledgerCreditsByLikeId: Map<string, number>,
   tx: Tx = prisma
-): Promise<{ rewardedCount: number; usedCount: number; ledgerDelta: number; availableCount: number }> {
+): Promise<{
+  rewardedCount: number;
+  awardedCount: number;
+  usedCount: number;
+  ledgerDelta: number;
+  availableCount: number;
+}> {
   const effectiveStart = await effectiveStartForTier(
     userId,
     like.tier,
@@ -112,13 +142,23 @@ async function availableForLike(
     now,
     tx
   );
-  const rewardedCount = await rewardedCountForLike(userId, like.id, effectiveStart, tx);
+  const rewardedCount = await rewardedCountForLike(
+    userId,
+    like.id,
+    like.tier,
+    effectiveStart,
+    tx
+  );
   const usedCount = usedByLikeId.get(`${like.id}:${bucketKey}`) ?? 0;
   const ledgerDelta =
     ledgerByLikeId.get(`${like.id}:${bucketKey}`) ??
     (await ledgerDeltaForLike(userId, like.id, bucketKey, tx));
+  const ledgerCredits =
+    ledgerCreditsByLikeId.get(`${like.id}:${bucketKey}`) ??
+    (await ledgerCreditsForLike(userId, like.id, bucketKey, tx));
+  const awardedCount = rewardedCount + ledgerCredits;
   const availableCount = rewardedCount - usedCount + ledgerDelta;
-  return { rewardedCount, usedCount, ledgerDelta, availableCount };
+  return { rewardedCount, awardedCount, usedCount, ledgerDelta, availableCount };
 }
 
 export function trackingMetaForTiers(timeZoneInput: string): Record<RewardTier, LikeTrackingMeta> {
@@ -184,18 +224,37 @@ export async function likesWithTracking(
     ledgerRows.map((row) => [`${row.likeId}:${row.bucketKey}`, row._sum.delta ?? 0])
   );
 
+  const ledgerCreditRows = await prisma.likeCreditLedger.groupBy({
+    by: ["likeId", "bucketKey"],
+    where: {
+      userId,
+      delta: { gt: 0 },
+      OR: TIERS.map((tier) => ({
+        bucketKey: trackingByTier[tier].bucketKey,
+        like: { tier },
+      })),
+    },
+    _sum: { delta: true },
+  });
+
+  const ledgerCreditsByLikeId = new Map(
+    ledgerCreditRows.map((row) => [`${row.likeId}:${row.bucketKey}`, row._sum.delta ?? 0])
+  );
+
   const result: LikeWithTracking[] = [];
 
   for (const like of likes) {
     const bucketKey = trackingByTier[like.tier].bucketKey;
-    const { rewardedCount, usedCount, ledgerDelta, availableCount } = await availableForLike(
+    const { rewardedCount, awardedCount, usedCount, ledgerDelta, availableCount } =
+      await availableForLike(
       userId,
       like,
       bucketKey,
       timeZone,
       now,
       usedByLikeId,
-      ledgerByLikeId
+      ledgerByLikeId,
+      ledgerCreditsByLikeId
     );
 
     result.push({
@@ -205,6 +264,7 @@ export async function likesWithTracking(
       label: like.label,
       createdAt: like.createdAt.toISOString(),
       rewardedCount,
+      awardedCount,
       usedCount,
       ledgerDelta,
       availableCount,
@@ -395,6 +455,7 @@ export async function splitLikeCredit(
       now,
       new Map(),
       new Map(),
+      new Map(),
       tx
     );
     if (sourceAvailable.availableCount < 1) {
@@ -485,6 +546,20 @@ export async function combineLikeCredits(
       ledgerRows.map((row) => [`${row.likeId}:${row.bucketKey}`, row._sum.delta ?? 0])
     );
 
+    const ledgerCreditRows = await tx.likeCreditLedger.groupBy({
+      by: ["likeId", "bucketKey"],
+      where: {
+        userId,
+        likeId: { in: sourceIds },
+        bucketKey: lowerBucketKey,
+        delta: { gt: 0 },
+      },
+      _sum: { delta: true },
+    });
+    const ledgerCreditsByLikeId = new Map(
+      ledgerCreditRows.map((row) => [`${row.likeId}:${row.bucketKey}`, row._sum.delta ?? 0])
+    );
+
     for (const { likeId, count } of normalized) {
       const source = sourceById.get(likeId)!;
       const { availableCount } = await availableForLike(
@@ -495,6 +570,7 @@ export async function combineLikeCredits(
         now,
         usedByLikeId,
         ledgerByLikeId,
+        ledgerCreditsByLikeId,
         tx
       );
       if (availableCount < count) {

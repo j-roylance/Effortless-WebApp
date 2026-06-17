@@ -119,8 +119,8 @@ export function LikesPage() {
         Things you enjoy at each tier. Spend tokens to spin and maybe win one.
       </p>
       <p className="like-tracking-legend">
-        Per like: <strong>rewarded</strong> (earned) · <strong>used</strong> (− / +) ·{" "}
-        <strong>available</strong> (split/combine)
+        Per like: <strong>E</strong> earned · <strong>U</strong> used (− / +) ·{" "}
+        <strong>A</strong> available (split/combine)
       </p>
 
       {(likesError || tokensError) && (
@@ -219,7 +219,7 @@ export function LikesPage() {
                 <li key={item.id} className="like-item">
                   <span className="like-item-label">{item.label}</span>
                   <LikeUsageStepper
-                    rewardedCount={item.rewardedCount}
+                    awardedCount={item.awardedCount}
                     usedCount={item.usedCount}
                     availableCount={item.availableCount}
                     disabled={pendingUsedLikeId === item.id}

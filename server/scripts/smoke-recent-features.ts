@@ -6,6 +6,7 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { RewardTier, TaskRewardKind } from "@prisma/client";
 import { BACKUP_FORMAT, BACKUP_VERSION } from "../src/domain/account-backup.js";
+import { dayKeyForTimezone, startOfLocalDayUtc } from "../src/domain/daily.js";
 import { conversionCount } from "../src/domain/like-conversions.js";
 import {
   parseTaskRewards,
@@ -15,7 +16,7 @@ import {
 } from "../src/domain/rewards.js";
 import { prisma } from "../src/lib/prisma.js";
 import { exportAccountBackup, importAccountBackup } from "../src/services/account-backup.js";
-import { likesWithTracking, splitLikeCredit } from "../src/services/like-tracking.js";
+import { likesWithTracking, combineLikeCredits, splitLikeCredit } from "../src/services/like-tracking.js";
 import { getScheduleStatus } from "../src/services/spin.js";
 
 let failures = 0;
@@ -64,6 +65,13 @@ async function main() {
   const parsed = parseTaskRewards([{ kind: "token", tier: "Gold" }]);
   assert("parseTaskRewards", parsed.length === 1 && parsed[0]?.tier === "Gold");
 
+  const laMidnight = startOfLocalDayUtc("America/Los_Angeles", new Date("2025-06-15T07:00:00Z"));
+  const laParts = dayKeyForTimezone("America/Los_Angeles", laMidnight);
+  assert(
+    "startOfLocalDayUtc LA",
+    laParts === "2025-06-15" && laMidnight.toISOString() === "2025-06-15T07:00:00.000Z"
+  );
+
   if (!process.env.DATABASE_URL) {
     console.log("\nSKIP DB tests (DATABASE_URL not set)");
     process.exit(failures > 0 ? 1 : 0);
@@ -101,6 +109,7 @@ async function main() {
     const tracking = await likesWithTracking(user.id, "UTC");
     const silver = tracking.likes.find((l) => l.id === silverLike.id);
     assert("likesWithTracking availableCount", silver?.availableCount === 1);
+    assert("likesWithTracking awardedCount from grant", silver?.awardedCount === 1);
     assert(
       "likesWithTracking has ledgerDelta",
       typeof silver?.ledgerDelta === "number"
@@ -120,7 +129,24 @@ async function main() {
     const silverAfter = afterSplit.likes.find((l) => l.id === silverLike.id);
     const bronzeAfter = afterSplit.likes.find((l) => l.id === bronzeLike.id);
     assert("split reduces silver available", silverAfter?.availableCount === 0);
-    assert("split credits bronze", bronzeAfter?.availableCount === 1);
+    assert("split keeps silver awarded", silverAfter?.awardedCount === 1);
+    assert("split credits bronze available", bronzeAfter?.availableCount === 1);
+    assert("split credits bronze awarded", bronzeAfter?.awardedCount === 1);
+
+    await combineLikeCredits(
+      user.id,
+      silverLike.id,
+      [
+        { likeId: bronzeLike.id, count: 1 },
+        { likeId: bronzeLike2.id, count: 1 },
+      ],
+      "UTC"
+    );
+
+    const afterCombine = await likesWithTracking(user.id, "UTC");
+    const silverCombined = afterCombine.likes.find((l) => l.id === silverLike.id);
+    assert("combine restores silver available", silverCombined?.availableCount === 1);
+    assert("combine increments silver awarded", silverCombined?.awardedCount === 2);
 
     await prisma.habit.create({
       data: {

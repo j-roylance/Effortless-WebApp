@@ -3,6 +3,14 @@
  * Keep client/src/domain/tiers.ts in sync for labels and colors.
  */
 import { RewardTier } from "@prisma/client";
+import {
+  dayKeyForTimezone,
+  safeTimeZone,
+  startOfLocalDayUtc,
+  startOfLocalMonthUtc,
+  startOfLocalWeekUtc,
+  startOfLocalYearUtc,
+} from "./daily.js";
 
 export const TIERS: RewardTier[] = [
   RewardTier.Bronze,
@@ -67,34 +75,11 @@ export function isValidTier(value: string): value is RewardTier {
 }
 
 function startOfBucket(date: Date, bucket: Bucket, timeZone: string): Date {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-
-  const y = Number(parts.find((p) => p.type === "year")!.value);
-  const m = Number(parts.find((p) => p.type === "month")!.value) - 1;
-  const d = Number(parts.find((p) => p.type === "day")!.value);
-
-  if (bucket === "day") {
-    return new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
-  }
-
-  const day = date.getUTCDay();
-  const mondayOffset = (day + 6) % 7;
-  const weekStart = new Date(Date.UTC(y, m, d - mondayOffset, 0, 0, 0, 0));
-
-  if (bucket === "week") {
-    return weekStart;
-  }
-
-  if (bucket === "month") {
-    return new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
-  }
-
-  return new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0));
+  const tz = safeTimeZone(timeZone);
+  if (bucket === "day") return startOfLocalDayUtc(tz, date);
+  if (bucket === "week") return startOfLocalWeekUtc(tz, date);
+  if (bucket === "month") return startOfLocalMonthUtc(tz, date);
+  return startOfLocalYearUtc(tz, date);
 }
 
 export function bucketStartForTier(tier: RewardTier, now: Date, timeZone: string): Date {
@@ -102,35 +87,32 @@ export function bucketStartForTier(tier: RewardTier, now: Date, timeZone: string
   return startOfBucket(now, bucket, timeZone);
 }
 
-function isoWeekKey(date: Date): string {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const day = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+function isoWeekKeyFromYmd(y: number, m: number, d: number): string {
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
 /** Stable bucket id for like usage tracking (matches bucketStartForTier periods). */
 export function bucketKeyForTier(tier: RewardTier, timeZone: string, now = new Date()): string {
+  const tz = safeTimeZone(timeZone);
   const { bucket } = TIER_LIMITS[tier];
-  const start = startOfBucket(now, bucket, timeZone);
+  const dayKey = dayKeyForTimezone(tz, now);
+  const [y, m, d] = dayKey.split("-").map(Number);
 
   if (bucket === "day") {
-    const y = start.getUTCFullYear();
-    const m = String(start.getUTCMonth() + 1).padStart(2, "0");
-    const d = String(start.getUTCDate()).padStart(2, "0");
-    return `day:${y}-${m}-${d}`;
+    return `day:${dayKey}`;
   }
   if (bucket === "week") {
-    return `week:${isoWeekKey(start)}`;
+    return `week:${isoWeekKeyFromYmd(y, m, d)}`;
   }
   if (bucket === "month") {
-    const y = start.getUTCFullYear();
-    const m = String(start.getUTCMonth() + 1).padStart(2, "0");
-    return `month:${y}-${m}`;
+    return `month:${y}-${String(m).padStart(2, "0")}`;
   }
-  return `year:${start.getUTCFullYear()}`;
+  return `year:${y}`;
 }
 
 export function tierClaimLimit(tier: RewardTier): number {

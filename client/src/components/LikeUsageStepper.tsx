@@ -1,11 +1,32 @@
+function LikeStat({
+  keyLabel,
+  value,
+  className,
+  title,
+}: {
+  keyLabel: string;
+  value: number;
+  className: string;
+  title: string;
+}) {
+  return (
+    <span className={className} title={title} aria-label={`${title}: ${value}`}>
+      <span className="like-stat-key" aria-hidden="true">
+        {keyLabel}
+      </span>
+      {value}
+    </span>
+  );
+}
+
 export function LikeUsageStepper({
-  rewardedCount,
+  awardedCount,
   usedCount,
   availableCount,
   disabled,
   onDelta,
 }: {
-  rewardedCount: number;
+  awardedCount: number;
   usedCount: number;
   availableCount: number;
   disabled?: boolean;
@@ -13,9 +34,12 @@ export function LikeUsageStepper({
 }) {
   return (
     <div className="like-usage">
-      <span className="like-usage-rewarded" title="Earned this period">
-        {rewardedCount}
-      </span>
+      <LikeStat
+        keyLabel="E"
+        value={awardedCount}
+        className="like-usage-earned"
+        title="Earned this period (wins, tasks, combine/split)"
+      />
       <div className="like-usage-stepper">
         <button
           type="button"
@@ -26,9 +50,12 @@ export function LikeUsageStepper({
         >
           −
         </button>
-        <span className="like-usage-used" title="Used this period">
-          {usedCount}
-        </span>
+        <LikeStat
+          keyLabel="U"
+          value={usedCount}
+          className="like-usage-used"
+          title="Used this period"
+        />
         <button
           type="button"
           className="like-usage-btn"
@@ -39,9 +66,12 @@ export function LikeUsageStepper({
           +
         </button>
       </div>
-      <span className="like-usage-available" title="Available for split/combine">
-        {availableCount}
-      </span>
+      <LikeStat
+        keyLabel="A"
+        value={availableCount}
+        className="like-usage-available"
+        title="Available for split/combine"
+      />
     </div>
   );
 }

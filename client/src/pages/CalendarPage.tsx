@@ -12,6 +12,7 @@ import { useRewardQueue } from "../hooks/useRewardQueue";
 import { rewardsFromAchieve, rewardsFromPlanningClaim } from "../domain/achieve-rewards";
 import { useAuth } from "../context/AuthContext";
 import { TaskFormPage } from "./TaskFormPage";
+import { TaskRewardGlyphs } from "../components/TaskRewardGlyphs";
 import {
   CALENDAR_HOUR_HEIGHT,
   entriesForDay,
@@ -308,7 +309,13 @@ export function CalendarPage() {
                   }}
                 >
                   <div className="calendar-event-body">
-                    <span className="calendar-event-name">{entry.task.name}</span>
+                    <div className="calendar-event-title-row">
+                      <TaskRewardGlyphs
+                        rewards={entry.task.rewards ?? []}
+                        variant="calendar"
+                      />
+                      <span className="calendar-event-name">{entry.task.name}</span>
+                    </div>
                     <span className="calendar-event-type">
                       {entry.type === "do" ? "Do" : "Due"}
                       {entry.isRecurringInstance ? " · Repeat" : ""}

@@ -1942,12 +1942,59 @@ h3,
   gap: 0.35rem;
 }
 
+.calendar-event-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.calendar-reward-glyphs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+
+.calendar-reward-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1em;
+  height: 1.1em;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  line-height: 1;
+  border: 1px solid var(--text-dim);
+  border-radius: 3px;
+  color: var(--text-dim);
+}
+
+.calendar-reward-glyph--tier {
+  color: inherit;
+  border-width: 1.5px;
+}
+
+.calendar-event--do .calendar-reward-glyph {
+  background: rgba(255, 255, 255, 0.55);
+  color: #0a0e14;
+  border-color: rgba(0, 0, 0, 0.35);
+}
+
+.calendar-event--do .calendar-reward-glyph--tier {
+  background: rgba(255, 255, 255, 0.75);
+}
+
 .calendar-event-name {
   font-size: 0.8rem;
   font-weight: 600;
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .calendar-event--do .calendar-event-name {

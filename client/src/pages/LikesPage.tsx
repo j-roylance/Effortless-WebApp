@@ -219,7 +219,6 @@ export function LikesPage() {
                 <li key={item.id} className="like-item">
                   <span className="like-item-label">{item.label}</span>
                   <LikeUsageStepper
-                    awardedCount={item.awardedCount}
                     usedCount={item.usedCount}
                     availableCount={item.availableCount}
                     disabled={pendingUsedLikeId === item.id}

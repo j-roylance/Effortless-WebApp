@@ -20,25 +20,25 @@ function LikeStat({
 }
 
 export function LikeUsageStepper({
-  awardedCount,
   usedCount,
   availableCount,
   disabled,
   onDelta,
 }: {
-  awardedCount: number;
   usedCount: number;
   availableCount: number;
   disabled?: boolean;
   onDelta: (delta: 1 | -1) => void;
 }) {
+  const earnedCount = availableCount + usedCount;
+
   return (
     <div className="like-usage">
       <LikeStat
         keyLabel="E"
-        value={awardedCount}
+        value={earnedCount}
         className="like-usage-earned"
-        title="Earned this period (wins, tasks, combine/split)"
+        title="Earned this period (available + used)"
       />
       <div className="like-usage-stepper">
         <button

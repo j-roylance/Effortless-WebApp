@@ -4,16 +4,23 @@ import {
   DEFAULT_SPIN_OUTCOME_WEIGHTS,
   type SpinOutcomeWeights,
 } from "./spin-odds";
+import {
+  deriveDefaultPitySettings,
+  type SpinPitySettings,
+} from "./spin-pity";
 
 export type { MilestoneReward } from "./rewards";
 export { NONE_MILESTONE_REWARD, parseMilestoneReward } from "./rewards";
 export type { SpinOutcomeWeights } from "./spin-odds";
+export type { SpinPitySettings } from "./spin-pity";
+export { deriveDefaultPitySettings, syncPityLevelUp } from "./spin-pity";
 
 export interface DailySettings {
   planningReward: MilestoneReward;
   allMustsReward: MilestoneReward;
   allDoDatesReward: MilestoneReward;
   spinOutcomeWeights: SpinOutcomeWeights;
+  spinPitySettings: SpinPitySettings;
 }
 
 export const DEFAULT_DAILY_SETTINGS: DailySettings = {
@@ -21,6 +28,7 @@ export const DEFAULT_DAILY_SETTINGS: DailySettings = {
   allMustsReward: { kind: "none" },
   allDoDatesReward: { kind: "none" },
   spinOutcomeWeights: { ...DEFAULT_SPIN_OUTCOME_WEIGHTS },
+  spinPitySettings: deriveDefaultPitySettings(DEFAULT_SPIN_OUTCOME_WEIGHTS),
 };
 
 export type OptionalRewardTier = RewardTier | "None";

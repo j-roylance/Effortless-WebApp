@@ -206,6 +206,7 @@ model DailySettings {
   allMustsReward     Json     @default("{\"kind\":\"none\"}")
   allDoDatesReward   Json     @default("{\"kind\":\"none\"}")
   spinOutcomeWeights Json     @default("{\"win\":25,\"levelUp\":25,\"noReward\":25,\"levelDown\":25}")
+  spinPitySettings   Json     @default("{\"enabled\":true,\"oneLoss\":{\"win\":50,\"levelUp\":25,\"noReward\":12,\"levelDown\":13},\"maxLoss\":{\"win\":75,\"levelUp\":25,\"noReward\":0,\"levelDown\":0}}")
   updatedAt          DateTime @updatedAt
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

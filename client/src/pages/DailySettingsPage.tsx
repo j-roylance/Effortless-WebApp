@@ -6,10 +6,12 @@ import { PageHeader } from "../components/PageHeader";
 import { QueryErrorBanner } from "../components/QueryErrorBanner";
 import { RewardPicker } from "../components/RewardPicker";
 import { SpinOddsEditor } from "../components/SpinOddsEditor";
+import { SpinPityEditor } from "../components/SpinPityEditor";
 import { AccountBackupSection } from "../components/AccountBackupSection";
 import { Toast } from "../components/Toast";
 import {
   DEFAULT_DAILY_SETTINGS,
+  syncPityLevelUp,
   type DailySettings,
 } from "../domain/daily";
 import type { MilestoneReward } from "../domain/rewards";
@@ -17,6 +19,11 @@ import {
   validateSpinOutcomeWeights,
   type SpinOutcomeWeights,
 } from "../domain/spin-odds";
+import {
+  parseSpinPitySettings,
+  validateSpinPitySettings,
+  type SpinPitySettings,
+} from "../domain/spin-pity";
 
 const MILESTONE_FIELDS: {
   key: "planningReward" | "allMustsReward" | "allDoDatesReward";
@@ -58,7 +65,16 @@ export function DailySettingsPage() {
   const likes = likesData?.likes ?? [];
 
   useEffect(() => {
-    if (data) setSettings(data);
+    if (data) {
+      const spinPitySettings = parseSpinPitySettings(
+        data.spinPitySettings,
+        data.spinOutcomeWeights
+      );
+      setSettings({
+        ...data,
+        spinPitySettings: syncPityLevelUp(data.spinOutcomeWeights, spinPitySettings),
+      });
+    }
   }, [data]);
 
   const saveMutation = useMutation({
@@ -84,12 +100,29 @@ export function DailySettingsPage() {
   }
 
   function updateSpinOdds(value: SpinOutcomeWeights) {
-    setSettings((prev) => ({ ...prev, spinOutcomeWeights: value }));
+    setSettings((prev) => ({
+      ...prev,
+      spinOutcomeWeights: value,
+      spinPitySettings: syncPityLevelUp(value, prev.spinPitySettings),
+    }));
+  }
+
+  function updateSpinPity(value: SpinPitySettings) {
+    setSettings((prev) => ({
+      ...prev,
+      spinPitySettings: syncPityLevelUp(prev.spinOutcomeWeights, value),
+    }));
   }
 
   function validate(): string | null {
     const oddsErr = validateSpinOutcomeWeights(settings.spinOutcomeWeights);
     if (oddsErr) return oddsErr;
+
+    const pityErr = validateSpinPitySettings(
+      settings.spinOutcomeWeights,
+      settings.spinPitySettings
+    );
+    if (pityErr) return pityErr;
 
     for (const field of MILESTONE_FIELDS) {
       const reward = settings[field.key];
@@ -137,6 +170,19 @@ export function DailySettingsPage() {
         <SpinOddsEditor
           value={settings.spinOutcomeWeights}
           onChange={updateSpinOdds}
+        />
+      </section>
+
+      <section className="daily-settings-card neon-card" style={{ marginBottom: "1rem" }}>
+        <h3 className="daily-settings-label">Pity odds</h3>
+        <p className="daily-settings-desc">
+          After consecutive losses on a tier, boosted odds apply (Step up stays fixed to base).
+        </p>
+        <SpinPityEditor
+          value={settings.spinPitySettings}
+          baseLevelUp={settings.spinOutcomeWeights.levelUp}
+          baseWin={settings.spinOutcomeWeights.win}
+          onChange={updateSpinPity}
         />
       </section>
 

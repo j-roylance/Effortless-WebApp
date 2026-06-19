@@ -1825,6 +1825,44 @@ h3,
   color: var(--danger);
 }
 
+.spin-odds-input--locked {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.spin-pity-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.spin-pity-enable {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.spin-pity-profile {
+  padding-top: 0.25rem;
+  border-top: 1px solid rgba(0, 243, 255, 0.12);
+}
+
+.spin-pity-profile-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  font-family: var(--font-display);
+}
+
+.spin-pity-warning {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: var(--danger);
+}
+
 .reward-picker {
   display: flex;
   flex-direction: column;

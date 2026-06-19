@@ -103,6 +103,7 @@ export async function exportAccountBackup(
             allMustsReward: dailySettings.allMustsReward,
             allDoDatesReward: dailySettings.allDoDatesReward,
             spinOutcomeWeights: dailySettings.spinOutcomeWeights,
+            spinPitySettings: dailySettings.spinPitySettings,
             updatedAt: dailySettings.updatedAt.toISOString(),
           }
         : null,
@@ -360,6 +361,10 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           allMustsReward: data.dailySettings.allMustsReward as Prisma.InputJsonValue,
           allDoDatesReward: data.dailySettings.allDoDatesReward as Prisma.InputJsonValue,
           spinOutcomeWeights: data.dailySettings.spinOutcomeWeights as Prisma.InputJsonValue,
+          spinPitySettings:
+            data.dailySettings.spinPitySettings === undefined
+              ? undefined
+              : (data.dailySettings.spinPitySettings as Prisma.InputJsonValue),
           updatedAt: parseRequiredDate(data.dailySettings.updatedAt, "dailySettings.updatedAt"),
         },
       });

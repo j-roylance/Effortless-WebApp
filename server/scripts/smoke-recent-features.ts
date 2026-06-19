@@ -18,7 +18,10 @@ import { DEFAULT_SPIN_OUTCOME_WEIGHTS } from "../src/domain/spin-odds.js";
 import {
   applyPityToWeights,
   countConsecutivePityLosses,
+  deriveDefaultPitySettings,
   isPityLoss,
+  resolvePityWeights,
+  validateSpinPitySettings,
 } from "../src/domain/spin-pity.js";
 import { expiresAtForTier } from "../src/domain/tiers.js";
 import { prisma } from "../src/lib/prisma.js";
@@ -118,6 +121,38 @@ async function main() {
   assert(
     "applyPity partial double drains loss pool",
     tightOne.win === 70 && tightOne.levelUp === 30 && tightOne.noReward === 0 && tightOne.levelDown === 0
+  );
+
+  const customPity = {
+    enabled: true,
+    oneLoss: { win: 60, levelUp: 25, noReward: 10, levelDown: 5 },
+    maxLoss: { win: 80, levelUp: 25, noReward: 0, levelDown: 0 },
+  };
+  assert(
+    "validateSpinPitySettings rejects bad levelUp",
+    validateSpinPitySettings(base, {
+      ...customPity,
+      oneLoss: { ...customPity.oneLoss, levelUp: 20 },
+    }) !== null
+  );
+  assert(
+    "validateSpinPitySettings rejects non-monotonic win",
+    validateSpinPitySettings(base, {
+      ...customPity,
+      maxLoss: { ...customPity.maxLoss, win: 40 },
+    }) !== null
+  );
+  assert(
+    "resolvePityWeights uses custom maxLoss",
+    resolvePityWeights(base, 2, customPity).win === 80
+  );
+  assert(
+    "resolvePityWeights disabled returns base",
+    resolvePityWeights(base, 2, { ...customPity, enabled: false }).win === base.win
+  );
+  assert(
+    "deriveDefaultPitySettings matches algorithm",
+    deriveDefaultPitySettings(base).maxLoss.win === 75
   );
 
   const legacy = {
@@ -306,10 +341,27 @@ async function main() {
         },
       ],
     });
-    const bronzePity = await getPityStatusForTier(user.id, RewardTier.Bronze, base);
+    const bronzePity = await getPityStatusForTier(user.id, RewardTier.Bronze);
     assert(
       "pity 2 Bronze losses maxes reward",
       bronzePity.consecutiveLosses === 2 && bronzePity.effectiveWeights.win === 75
+    );
+
+    await prisma.dailySettings.create({
+      data: {
+        userId: user.id,
+        spinPitySettings: {
+          enabled: true,
+          oneLoss: { win: 50, levelUp: 25, noReward: 12, levelDown: 13 },
+          maxLoss: { win: 80, levelUp: 25, noReward: 0, levelDown: 0 },
+        },
+      },
+    });
+    const customBronzePity = await getPityStatusForTier(user.id, RewardTier.Bronze);
+    assert(
+      "pity custom maxLoss profile",
+      customBronzePity.consecutiveLosses === 2 &&
+        customBronzePity.effectiveWeights.win === 80
     );
   } finally {
     await prisma.user.delete({ where: { id: user.id } });

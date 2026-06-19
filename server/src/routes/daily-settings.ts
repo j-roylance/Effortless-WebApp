@@ -16,6 +16,13 @@ import {
   validateSpinOutcomeWeights,
 } from "../domain/spin-odds.js";
 import {
+  parseSpinPitySettings,
+  spinPitySettingsToJson,
+  syncPityLevelUp,
+  validateSpinPitySettings,
+  type SpinPitySettings,
+} from "../domain/spin-pity.js";
+import {
   claimPlanningBonus,
 } from "../services/daily-rewards.js";
 
@@ -50,6 +57,13 @@ const saveSchema = z.object({
   allMustsReward: milestoneRewardSchema.optional(),
   allDoDatesReward: milestoneRewardSchema.optional(),
   spinOutcomeWeights: spinOutcomeWeightsSchema.optional(),
+  spinPitySettings: z
+    .object({
+      enabled: z.boolean(),
+      oneLoss: spinOutcomeWeightsSchema,
+      maxLoss: spinOutcomeWeightsSchema,
+    })
+    .optional(),
 });
 
 function serializeSettings(row: {
@@ -57,12 +71,18 @@ function serializeSettings(row: {
   allMustsReward: unknown;
   allDoDatesReward: unknown;
   spinOutcomeWeights: unknown;
+  spinPitySettings: unknown;
 }) {
+  const spinOutcomeWeights = parseSpinOutcomeWeights(row.spinOutcomeWeights);
   return {
     planningReward: parseMilestoneReward(row.planningReward),
     allMustsReward: parseMilestoneReward(row.allMustsReward),
     allDoDatesReward: parseMilestoneReward(row.allDoDatesReward),
-    spinOutcomeWeights: parseSpinOutcomeWeights(row.spinOutcomeWeights),
+    spinOutcomeWeights,
+    spinPitySettings: syncPityLevelUp(
+      spinOutcomeWeights,
+      parseSpinPitySettings(row.spinPitySettings, spinOutcomeWeights)
+    ),
   };
 }
 
@@ -83,11 +103,13 @@ dailySettingsRouter.get("/", async (req: AuthedRequest, res) => {
     where: { userId: req.user!.userId },
   });
   if (!row) {
+    const spinOutcomeWeights = parseSpinOutcomeWeights(null);
     res.json({
       planningReward: { kind: "none" },
       allMustsReward: { kind: "none" },
       allDoDatesReward: { kind: "none" },
-      spinOutcomeWeights: parseSpinOutcomeWeights(null),
+      spinOutcomeWeights,
+      spinPitySettings: parseSpinPitySettings(null, spinOutcomeWeights),
     });
     return;
   }
@@ -112,10 +134,34 @@ dailySettingsRouter.put("/", async (req: AuthedRequest, res) => {
       ? parseSpinOutcomeWeights(body.spinOutcomeWeights)
       : undefined;
 
+    const existingRow = await prisma.dailySettings.findUnique({
+      where: { userId },
+      select: { spinOutcomeWeights: true, spinPitySettings: true },
+    });
+    const resolvedBase =
+      spinOutcomeWeights ??
+      parseSpinOutcomeWeights(existingRow?.spinOutcomeWeights ?? null);
+
+    let spinPitySettings: SpinPitySettings | undefined = body.spinPitySettings
+      ? parseSpinPitySettings(body.spinPitySettings, resolvedBase)
+      : existingRow
+        ? parseSpinPitySettings(existingRow.spinPitySettings, resolvedBase)
+        : parseSpinPitySettings(null, resolvedBase);
+
+    spinPitySettings = syncPityLevelUp(resolvedBase, spinPitySettings);
+
     if (spinOutcomeWeights) {
       const oddsErr = validateSpinOutcomeWeights(spinOutcomeWeights);
       if (oddsErr) {
         res.status(400).json({ error: oddsErr });
+        return;
+      }
+    }
+
+    if (body.spinPitySettings || spinOutcomeWeights) {
+      const pityErr = validateSpinPitySettings(resolvedBase, spinPitySettings);
+      if (pityErr) {
+        res.status(400).json({ error: pityErr });
         return;
       }
     }
@@ -134,6 +180,7 @@ dailySettingsRouter.put("/", async (req: AuthedRequest, res) => {
       allMustsReward?: ReturnType<typeof milestoneRewardToJson>;
       allDoDatesReward?: ReturnType<typeof milestoneRewardToJson>;
       spinOutcomeWeights?: Prisma.InputJsonValue;
+      spinPitySettings?: Prisma.InputJsonValue;
     } = {};
 
     if (planningReward) data.planningReward = milestoneRewardToJson(planningReward);
@@ -143,6 +190,10 @@ dailySettingsRouter.put("/", async (req: AuthedRequest, res) => {
       const json = spinOutcomeWeightsToJson(spinOutcomeWeights);
       data.spinOutcomeWeights = json as unknown as Prisma.InputJsonValue;
     }
+    if (body.spinPitySettings || spinOutcomeWeights) {
+      const json = spinPitySettingsToJson(spinPitySettings);
+      data.spinPitySettings = json as unknown as Prisma.InputJsonValue;
+    }
 
     const row = await prisma.dailySettings.upsert({
       where: { userId },
@@ -151,6 +202,9 @@ dailySettingsRouter.put("/", async (req: AuthedRequest, res) => {
         planningReward: milestoneRewardToJson(planningReward ?? { kind: "none" }),
         allMustsReward: milestoneRewardToJson(allMustsReward ?? { kind: "none" }),
         allDoDatesReward: milestoneRewardToJson(allDoDatesReward ?? { kind: "none" }),
+        spinPitySettings: spinPitySettingsToJson(
+          spinPitySettings
+        ) as unknown as Prisma.InputJsonValue,
       },
       update: data,
     });

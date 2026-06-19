@@ -27,9 +27,12 @@ import {
   type SpinOutcomeWeights,
 } from "../domain/spin-odds.js";
 import {
-  applyPityToWeights,
   countConsecutivePityLosses,
   effectiveWeightsForTier,
+  parseSpinPitySettings,
+  resolvePityWeights,
+  syncPityLevelUp,
+  type SpinPitySettings,
 } from "../domain/spin-pity.js";
 
 type Tx = Prisma.TransactionClient;
@@ -111,14 +114,19 @@ export interface SpinPityStatus {
   effectiveWeights: SpinOutcomeWeights;
 }
 
-async function getBaseSpinWeights(userId: string): Promise<SpinOutcomeWeights> {
+async function getSpinWeightSettings(userId: string): Promise<{
+  base: SpinOutcomeWeights;
+  pity: SpinPitySettings;
+}> {
   const settingsRow = await prisma.dailySettings.findUnique({
     where: { userId },
-    select: { spinOutcomeWeights: true },
+    select: { spinOutcomeWeights: true, spinPitySettings: true },
   });
-  return parseSpinOutcomeWeights(
+  const base = parseSpinOutcomeWeights(
     settingsRow?.spinOutcomeWeights ?? DEFAULT_SPIN_OUTCOME_WEIGHTS
   );
+  const pity = parseSpinPitySettings(settingsRow?.spinPitySettings, base);
+  return { base, pity: syncPityLevelUp(base, pity) };
 }
 
 async function recentSpinsForTier(
@@ -137,22 +145,22 @@ async function recentSpinsForTier(
 export async function getPityStatusForTier(
   userId: string,
   tokenTier: RewardTier,
-  baseWeights?: SpinOutcomeWeights
+  weightSettings?: { base: SpinOutcomeWeights; pity: SpinPitySettings }
 ): Promise<SpinPityStatus> {
-  const base = baseWeights ?? (await getBaseSpinWeights(userId));
+  const { base, pity } = weightSettings ?? (await getSpinWeightSettings(userId));
   const recent = await recentSpinsForTier(userId, tokenTier);
-  return effectiveWeightsForTier(base, tokenTier, recent);
+  return effectiveWeightsForTier(base, tokenTier, recent, pity);
 }
 
 export async function getPityStatusByTier(
   userId: string
 ): Promise<Record<RewardTier, SpinPityStatus>> {
-  const base = await getBaseSpinWeights(userId);
+  const weightSettings = await getSpinWeightSettings(userId);
   const status = {} as Record<RewardTier, SpinPityStatus>;
 
   await Promise.all(
     TIERS.map(async (tier) => {
-      status[tier] = await getPityStatusForTier(userId, tier, base);
+      status[tier] = await getPityStatusForTier(userId, tier, weightSettings);
     })
   );
 
@@ -166,7 +174,7 @@ export async function executeSpin(
 ): Promise<SpinResult> {
   const timeZone = safeTimeZone(timeZoneInput);
 
-  const outcomeWeights = await getBaseSpinWeights(userId);
+  const { base: outcomeWeights, pity } = await getSpinWeightSettings(userId);
 
   const spinCore = await prisma.$transaction(async (tx) => {
     const token = await spendOldestToken(tx, userId, tokenTier);
@@ -176,7 +184,7 @@ export async function executeSpin(
 
     const recent = await recentSpinsForTier(userId, tokenTier, tx);
     const consecutiveLosses = countConsecutivePityLosses(recent, tokenTier);
-    const rollWeights = applyPityToWeights(outcomeWeights, consecutiveLosses);
+    const rollWeights = resolvePityWeights(outcomeWeights, consecutiveLosses, pity);
 
     let outcome = rollWeightedOutcome(rollWeights);
     let effectiveTier = effectiveTierForOutcome(tokenTier, outcome);

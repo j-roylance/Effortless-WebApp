@@ -1,8 +1,18 @@
 import { RewardTier, SpinOutcome } from "@prisma/client";
-import type { SpinOutcomeWeights } from "./spin-odds.js";
+import {
+  parseSpinOutcomeWeights,
+  validateSpinOutcomeWeights,
+  type SpinOutcomeWeights,
+} from "./spin-odds.js";
 
 export interface SpinLogOutcome {
   outcome: SpinOutcome;
+}
+
+export interface SpinPitySettings {
+  enabled: boolean;
+  oneLoss: SpinOutcomeWeights;
+  maxLoss: SpinOutcomeWeights;
 }
 
 /** True when this spin extends the pity loss streak for the spent token tier. */
@@ -59,8 +69,8 @@ function normalizeWeights(weights: SpinOutcomeWeights): SpinOutcomeWeights {
   return rounded;
 }
 
-/** Boost Reward (win) only; Step up stays fixed. */
-export function applyPityToWeights(
+/** Legacy algorithmic pity (used to derive defaults). */
+function computeAlgorithmicPityWeights(
   base: SpinOutcomeWeights,
   consecutiveLosses: number
 ): SpinOutcomeWeights {
@@ -96,12 +106,108 @@ export function applyPityToWeights(
   return normalizeWeights({ win, levelUp, noReward, levelDown });
 }
 
+/** Default pity profiles derived from base spin odds. */
+export function deriveDefaultPitySettings(base: SpinOutcomeWeights): SpinPitySettings {
+  return {
+    enabled: true,
+    oneLoss: computeAlgorithmicPityWeights(base, 1),
+    maxLoss: computeAlgorithmicPityWeights(base, 2),
+  };
+}
+
+export function syncPityLevelUp(
+  base: SpinOutcomeWeights,
+  pity: SpinPitySettings
+): SpinPitySettings {
+  return {
+    ...pity,
+    oneLoss: { ...pity.oneLoss, levelUp: base.levelUp },
+    maxLoss: { ...pity.maxLoss, levelUp: base.levelUp },
+  };
+}
+
+export function parseSpinPitySettings(
+  value: unknown,
+  base: SpinOutcomeWeights
+): SpinPitySettings {
+  const defaults = deriveDefaultPitySettings(base);
+  if (!value || typeof value !== "object") return defaults;
+
+  const o = value as Record<string, unknown>;
+  return {
+    enabled: typeof o.enabled === "boolean" ? o.enabled : defaults.enabled,
+    oneLoss: parseSpinOutcomeWeights(o.oneLoss ?? defaults.oneLoss),
+    maxLoss: parseSpinOutcomeWeights(o.maxLoss ?? defaults.maxLoss),
+  };
+}
+
+export function spinPitySettingsToJson(pity: SpinPitySettings): SpinPitySettings {
+  return {
+    enabled: pity.enabled,
+    oneLoss: { ...pity.oneLoss },
+    maxLoss: { ...pity.maxLoss },
+  };
+}
+
+export function validateSpinPitySettings(
+  base: SpinOutcomeWeights,
+  pity: SpinPitySettings
+): string | null {
+  for (const [label, profile] of [
+    ["After 1 loss", pity.oneLoss],
+    ["After 2+ losses", pity.maxLoss],
+  ] as const) {
+    const oddsErr = validateSpinOutcomeWeights(profile);
+    if (oddsErr) return `${label}: ${oddsErr}`;
+    if (profile.levelUp !== base.levelUp) {
+      return `${label}: Step up must match base spin odds (${base.levelUp}%)`;
+    }
+  }
+
+  if (pity.oneLoss.win < base.win) {
+    return "After 1 loss: Reward must be at least the base Reward %";
+  }
+  if (pity.maxLoss.win < pity.oneLoss.win) {
+    return "After 2+ losses: Reward must be at least the 1-loss Reward %";
+  }
+
+  return null;
+}
+
+export function resolvePityWeights(
+  base: SpinOutcomeWeights,
+  consecutiveLosses: number,
+  pity: SpinPitySettings
+): SpinOutcomeWeights {
+  if (!pity.enabled || consecutiveLosses <= 0) {
+    return { ...base };
+  }
+  if (consecutiveLosses === 1) {
+    return { ...pity.oneLoss };
+  }
+  return { ...pity.maxLoss };
+}
+
+/** Boost Reward (win) only; Step up stays fixed. Uses default algorithmic profiles. */
+export function applyPityToWeights(
+  base: SpinOutcomeWeights,
+  consecutiveLosses: number
+): SpinOutcomeWeights {
+  return resolvePityWeights(
+    base,
+    consecutiveLosses,
+    deriveDefaultPitySettings(base)
+  );
+}
+
 export function effectiveWeightsForTier(
   base: SpinOutcomeWeights,
   tokenTier: RewardTier,
-  recentSpins: SpinLogOutcome[]
+  recentSpins: SpinLogOutcome[],
+  pity?: SpinPitySettings
 ): { consecutiveLosses: number; effectiveWeights: SpinOutcomeWeights } {
   const consecutiveLosses = countConsecutivePityLosses(recentSpins, tokenTier);
-  const effectiveWeights = applyPityToWeights(base, consecutiveLosses);
+  const settings = pity ?? deriveDefaultPitySettings(base);
+  const effectiveWeights = resolvePityWeights(base, consecutiveLosses, settings);
   return { consecutiveLosses, effectiveWeights };
 }

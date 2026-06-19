@@ -133,6 +133,7 @@ export interface ExportedDailySettings {
   allMustsReward: unknown;
   allDoDatesReward: unknown;
   spinOutcomeWeights: unknown;
+  spinPitySettings?: unknown;
   updatedAt: string;
 }
 

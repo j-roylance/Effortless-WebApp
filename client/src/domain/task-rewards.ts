@@ -1,7 +1,7 @@
 import type { TaskRewardEntry } from "../api/types";
 import { TIER_COLORS, type RewardTier } from "./tiers";
 
-export type RewardGlyph = { char: string; title: string; color?: string };
+export type RewardGlyph = { char: string; title: string; color?: string; tier?: RewardTier };
 
 export function rewardGlyphs(rewards: TaskRewardEntry[]): RewardGlyph[] {
   return rewards.map((reward) => {
@@ -10,6 +10,7 @@ export function rewardGlyphs(rewards: TaskRewardEntry[]): RewardGlyph[] {
         char: reward.tier[0]!,
         color: TIER_COLORS[reward.tier],
         title: `${reward.tier} token`,
+        tier: reward.tier,
       };
     }
     if (reward.kind === "like") {

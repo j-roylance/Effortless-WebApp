@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { SpinResult } from "../api/types";
+import type { SpinResult, TokenBalances } from "../api/types";
 import { DEFAULT_DAILY_SETTINGS, type DailySettings } from "../domain/daily";
 import { formatSpinOddsSummary } from "../domain/spin-odds";
+import { pityTooltip } from "../domain/spin-pity";
 import { OUTCOME_REVEAL_MS, spinNeedsLikeWheel } from "../domain/spin";
 import {
   OUTCOME_LABELS,
@@ -12,6 +13,7 @@ import {
   type SpinOutcome,
 } from "../domain/tiers";
 import { OutcomeRoll } from "./OutcomeRoll";
+import { SpinPityHint } from "./SpinPityHint";
 import { SpinnerWheel } from "./SpinnerWheel";
 
 /**
@@ -48,9 +50,20 @@ export function RandomizerModal({
     queryKey: ["daily-settings"],
     queryFn: () => api<DailySettings>("/daily-settings"),
   });
-  const oddsSummary = formatSpinOddsSummary(
-    settings?.spinOutcomeWeights ?? DEFAULT_DAILY_SETTINGS.spinOutcomeWeights
-  );
+  const { data: tokenData } = useQuery({
+    queryKey: ["tokens"],
+    queryFn: () => api<TokenBalances>("/tokens"),
+  });
+
+  const baseWeights =
+    settings?.spinOutcomeWeights ?? DEFAULT_DAILY_SETTINGS.spinOutcomeWeights;
+  const pity = tokenData?.pityByTier?.[tokenTier];
+  const effectiveWeights = pity?.effectiveWeights ?? baseWeights;
+  const oddsSummary = formatSpinOddsSummary(effectiveWeights);
+  const oddsTitle =
+    pity && pity.consecutiveLosses > 0
+      ? pityTooltip(baseWeights, effectiveWeights, pity.consecutiveLosses)
+      : undefined;
 
   const advanceFromReveal = useCallback((data: SpinResult, skipped: boolean) => {
     if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
@@ -110,6 +123,12 @@ export function RandomizerModal({
       >
         <h2 id="randomizer-title" style={{ marginTop: 0, color: TIER_COLORS[tokenTier] }}>
           {tokenTier} Token
+          {pity && (
+            <>
+              {" "}
+              <SpinPityHint pity={pity} baseWeights={baseWeights} />
+            </>
+          )}
         </h2>
 
         {phase === "idle" && (
@@ -117,7 +136,12 @@ export function RandomizerModal({
             <p style={{ color: "var(--text-dim)" }}>
               Spend 1 {tokenTier} token to spin for a like at this tier.
             </p>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}>{oddsSummary}</p>
+            <p
+              style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}
+              title={oddsTitle}
+            >
+              {oddsSummary}
+            </p>
             {spinMutation.isError && (
               <p className="form-error">{(spinMutation.error as Error).message}</p>
             )}

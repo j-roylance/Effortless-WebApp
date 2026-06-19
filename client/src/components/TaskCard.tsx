@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import type { Task } from "../api/types";
+import type { RewardTier, SpinPityStatus, Task } from "../api/types";
+import type { SpinOutcomeWeights } from "../domain/spin-odds";
 import {
   formatDateTime,
   formatDuration,
@@ -7,6 +8,7 @@ import {
   recurrenceSummary,
 } from "../domain/recurrence";
 import { rewardSummaries } from "../domain/task-rewards";
+import { SpinPityHintForTier } from "./SpinPityHint";
 import { TierBadge } from "./TierBadge";
 
 export function TaskCard({
@@ -14,11 +16,15 @@ export function TaskCard({
   onAchieve,
   achieving,
   pastDue,
+  pityByTier,
+  baseSpinWeights,
 }: {
   task: Task;
   onAchieve: (id: string) => void;
   achieving: boolean;
   pastDue?: boolean;
+  pityByTier?: Record<RewardTier, SpinPityStatus>;
+  baseSpinWeights?: SpinOutcomeWeights;
 }) {
   const repeatLabel = recurrenceSummary(task.recurrence, task.recurrenceConfig);
   const achievedToday = isTaskAchievedToday(task.achievedAt);
@@ -34,7 +40,16 @@ export function TaskCard({
             <div className="task-reward-badges">
               {rewards.map((reward, index) =>
                 reward.kind === "token" ? (
-                  <TierBadge key={`${task.id}-token-${index}`} tier={reward.tier} />
+                  <span key={`${task.id}-token-${index}`} className="task-reward-token">
+                    <TierBadge tier={reward.tier} />
+                    {pityByTier && baseSpinWeights && (
+                      <SpinPityHintForTier
+                        tier={reward.tier}
+                        pityByTier={pityByTier}
+                        baseWeights={baseSpinWeights}
+                      />
+                    )}
+                  </span>
                 ) : (
                   <span key={`${task.id}-reward-${index}`} className="task-reward-chip">
                     {summaries[index]}

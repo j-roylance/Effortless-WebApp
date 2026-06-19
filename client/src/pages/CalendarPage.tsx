@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { AchieveResult, BonusToken, Task } from "../api/types";
+import type { AchieveResult, BonusToken, Task, TokenBalances } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { QueryErrorBanner } from "../components/QueryErrorBanner";
 import { Toast } from "../components/Toast";
 import { RewardModalHost } from "../components/RewardModalHost";
+import { SpinPityHintForTier } from "../components/SpinPityHint";
 import { useTokenRewardFromNavigation } from "../hooks/useTokenRewardFromNavigation";
 import { useRewardQueue } from "../hooks/useRewardQueue";
 import { rewardsFromAchieve, rewardsFromPlanningClaim } from "../domain/achieve-rewards";
@@ -26,6 +27,8 @@ import {
 } from "../domain/calendar";
 import { isTaskAchievedToday, toLocalDateInput } from "../domain/recurrence";
 import { TASK_SECTION_COLOR, normalizeSection } from "../domain/tasks";
+import { TIERS } from "../domain/tiers";
+import { DEFAULT_DAILY_SETTINGS, type DailySettings } from "../domain/daily";
 
 function shiftDate(dateInput: string, deltaDays: number): string {
   const d = new Date(`${dateInput}T12:00:00`);
@@ -43,6 +46,7 @@ export function CalendarPage() {
 
   const [selectedDate, setSelectedDate] = useState(todayDateInput());
   const [showNewTask, setShowNewTask] = useState(false);
+  const [showTokens, setShowTokens] = useState(false);
   const [planningTick, setPlanningTick] = useState(0);
   const { current: reward, enqueue: enqueueReward, dismissCurrent: dismissReward } =
     useRewardQueue();
@@ -56,9 +60,24 @@ export function CalendarPage() {
     setToast
   );
 
-  const { data: tasksData, isLoading, isError, refetch } = useQuery({
+  const {
+    data: tasksData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ["tasks"],
     queryFn: () => api<{ tasks: Task[] }>("/tasks"),
+  });
+
+  const { data: tokenData } = useQuery({
+    queryKey: ["tokens"],
+    queryFn: () => api<TokenBalances>("/tokens"),
+  });
+
+  const { data: settingsData } = useQuery({
+    queryKey: ["daily-settings"],
+    queryFn: () => api<DailySettings>("/daily-settings"),
   });
 
   const tasks = tasksData?.tasks ?? [];
@@ -213,9 +232,53 @@ export function CalendarPage() {
     day: "numeric",
   });
 
+  const balances = tokenData?.balances;
+  const pityByTier = tokenData?.pityByTier;
+  const baseSpinWeights =
+    settingsData?.spinOutcomeWeights ?? DEFAULT_DAILY_SETTINGS.spinOutcomeWeights;
+  const totalTokens = balances
+    ? TIERS.reduce((sum, t) => sum + (balances[t] ?? 0), 0)
+    : 0;
+
   return (
     <>
-      <PageHeader title="Calendar" />
+      <PageHeader
+        title="Calendar"
+        action={
+          <button
+            type="button"
+            className="token-chip"
+            onClick={() => setShowTokens((v) => !v)}
+          >
+            {totalTokens} tokens
+          </button>
+        }
+      />
+
+      {showTokens && balances && (
+        <div className="token-panel neon-card" style={{ marginBottom: "1rem" }}>
+          {TIERS.map((tier) =>
+            balances[tier] > 0 ? (
+              <div key={tier} className="token-row">
+                <span>{tier}</span>
+                <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <SpinPityHintForTier
+                    tier={tier}
+                    pityByTier={pityByTier}
+                    baseWeights={baseSpinWeights}
+                  />
+                  <span>{balances[tier]}</span>
+                </span>
+              </div>
+            ) : null
+          )}
+          {totalTokens === 0 && (
+            <p style={{ margin: 0, color: "var(--text-dim)", fontSize: "0.9rem" }}>
+              Complete tasks to earn tokens.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="calendar-toolbar neon-card">
         <div className="calendar-date-nav">
@@ -313,6 +376,8 @@ export function CalendarPage() {
                       <TaskRewardGlyphs
                         rewards={entry.task.rewards ?? []}
                         variant="calendar"
+                        pityByTier={pityByTier}
+                        baseSpinWeights={baseSpinWeights}
                       />
                       <span className="calendar-event-name">{entry.task.name}</span>
                     </div>

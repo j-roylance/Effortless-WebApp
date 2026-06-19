@@ -22,6 +22,8 @@ import { QueryErrorBanner } from "../components/QueryErrorBanner";
 import { Toast } from "../components/Toast";
 import { RandomizerModal } from "../components/RandomizerModal";
 import { WheelConfigModal } from "../components/WheelConfigModal";
+import { SpinPityHintForTier } from "../components/SpinPityHint";
+import { DEFAULT_DAILY_SETTINGS, type DailySettings } from "../domain/daily";
 
 export function LikesPage() {
   const queryClient = useQueryClient();
@@ -51,6 +53,11 @@ export function LikesPage() {
   } = useQuery({
     queryKey: ["tokens"],
     queryFn: () => api<import("../api/types").TokenBalances>("/tokens"),
+  });
+
+  const { data: settingsData } = useQuery({
+    queryKey: ["daily-settings"],
+    queryFn: () => api<DailySettings>("/daily-settings"),
   });
 
   const addMutation = useMutation({
@@ -105,6 +112,9 @@ export function LikesPage() {
 
   const balances = tokenData?.balances;
   const schedule = tokenData?.schedule;
+  const pityByTier = tokenData?.pityByTier;
+  const baseSpinWeights =
+    settingsData?.spinOutcomeWeights ?? DEFAULT_DAILY_SETTINGS.spinOutcomeWeights;
 
   function handleResetTier(tier: RewardTier) {
     if (confirm(`Reset all active ${tier} like credits for this tier?`)) {
@@ -206,6 +216,13 @@ export function LikesPage() {
                 >
                   Spin ({tokenCount})
                 </button>
+                {tokenCount > 0 && (
+                  <SpinPityHintForTier
+                    tier={tier}
+                    pityByTier={pityByTier}
+                    baseWeights={baseSpinWeights}
+                  />
+                )}
               </div>
             </div>
             <p className="like-freq">{TIER_USABLE_LIFETIME_LABEL[tier]}</p>

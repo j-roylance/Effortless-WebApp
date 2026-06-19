@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { AchieveResult, Task, TokenBalances } from "../api/types";
+import type { AchieveResult, RewardTier, SpinPityStatus, Task, TokenBalances } from "../api/types";
+import type { SpinOutcomeWeights } from "../domain/spin-odds";
 import { PageHeader } from "../components/PageHeader";
 import { QueryErrorBanner } from "../components/QueryErrorBanner";
 import { TaskCard } from "../components/TaskCard";
@@ -19,6 +20,8 @@ import {
   type TaskSection,
 } from "../domain/tasks";
 import { TIERS } from "../domain/tiers";
+import { SpinPityHintForTier } from "../components/SpinPityHint";
+import { DEFAULT_DAILY_SETTINGS, type DailySettings } from "../domain/daily";
 
 function TaskSectionBlock({
   section,
@@ -26,12 +29,16 @@ function TaskSectionBlock({
   pastDue,
   onAchieve,
   achieving,
+  pityByTier,
+  baseSpinWeights,
 }: {
   section: TaskSection;
   tasks: Task[];
   pastDue?: boolean;
   onAchieve: (id: string) => void;
   achieving: boolean;
+  pityByTier?: Record<RewardTier, SpinPityStatus>;
+  baseSpinWeights?: SpinOutcomeWeights;
 }) {
   const sectionClass = section.toLowerCase();
 
@@ -54,6 +61,8 @@ function TaskSectionBlock({
               pastDue={pastDue}
               onAchieve={onAchieve}
               achieving={achieving}
+              pityByTier={pityByTier}
+              baseSpinWeights={baseSpinWeights}
             />
           ))}
         </div>
@@ -86,6 +95,11 @@ export function TasksPage() {
     queryFn: () => api<TokenBalances>("/tokens"),
   });
 
+  const { data: settingsData } = useQuery({
+    queryKey: ["daily-settings"],
+    queryFn: () => api<DailySettings>("/daily-settings"),
+  });
+
   const achieveMutation = useMutation({
     mutationFn: (id: string) =>
       api<AchieveResult>(`/tasks/${id}/achieve`, { method: "POST" }),
@@ -104,6 +118,9 @@ export function TasksPage() {
   const hasPastDue = useMemo(() => tasks.some((t) => isTaskPastDue(t.dueAt)), [tasks]);
 
   const balances = tokenData?.balances;
+  const pityByTier = tokenData?.pityByTier;
+  const baseSpinWeights =
+    settingsData?.spinOutcomeWeights ?? DEFAULT_DAILY_SETTINGS.spinOutcomeWeights;
   const totalTokens = balances
     ? TIERS.reduce((sum, t) => sum + (balances[t] ?? 0), 0)
     : 0;
@@ -131,7 +148,14 @@ export function TasksPage() {
             balances[tier] > 0 ? (
               <div key={tier} className="token-row">
                 <span>{tier}</span>
-                <span>{balances[tier]}</span>
+                <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <SpinPityHintForTier
+                    tier={tier}
+                    pityByTier={pityByTier}
+                    baseWeights={baseSpinWeights}
+                  />
+                  <span>{balances[tier]}</span>
+                </span>
               </div>
             ) : null
           )}
@@ -164,6 +188,8 @@ export function TasksPage() {
             tasks={activeBySection[section]}
             onAchieve={handleAchieve}
             achieving={achieveMutation.isPending}
+            pityByTier={pityByTier}
+            baseSpinWeights={baseSpinWeights}
           />
         ))}
 
@@ -178,6 +204,8 @@ export function TasksPage() {
               pastDue
               onAchieve={handleAchieve}
               achieving={achieveMutation.isPending}
+              pityByTier={pityByTier}
+              baseSpinWeights={baseSpinWeights}
             />
           ))}
         </section>

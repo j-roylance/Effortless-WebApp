@@ -24,7 +24,13 @@ import {
   DEFAULT_SPIN_OUTCOME_WEIGHTS,
   parseSpinOutcomeWeights,
   rollWeightedOutcome,
+  type SpinOutcomeWeights,
 } from "../domain/spin-odds.js";
+import {
+  applyPityToWeights,
+  countConsecutivePityLosses,
+  effectiveWeightsForTier,
+} from "../domain/spin-pity.js";
 
 type Tx = Prisma.TransactionClient;
 
@@ -100,6 +106,59 @@ export interface SpinResult {
   tokenBalances: Record<RewardTier, number>;
 }
 
+export interface SpinPityStatus {
+  consecutiveLosses: number;
+  effectiveWeights: SpinOutcomeWeights;
+}
+
+async function getBaseSpinWeights(userId: string): Promise<SpinOutcomeWeights> {
+  const settingsRow = await prisma.dailySettings.findUnique({
+    where: { userId },
+    select: { spinOutcomeWeights: true },
+  });
+  return parseSpinOutcomeWeights(
+    settingsRow?.spinOutcomeWeights ?? DEFAULT_SPIN_OUTCOME_WEIGHTS
+  );
+}
+
+async function recentSpinsForTier(
+  userId: string,
+  tokenTier: RewardTier,
+  tx: Tx | typeof prisma = prisma
+) {
+  return tx.spinLog.findMany({
+    where: { userId, tokenTier },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: { outcome: true },
+  });
+}
+
+export async function getPityStatusForTier(
+  userId: string,
+  tokenTier: RewardTier,
+  baseWeights?: SpinOutcomeWeights
+): Promise<SpinPityStatus> {
+  const base = baseWeights ?? (await getBaseSpinWeights(userId));
+  const recent = await recentSpinsForTier(userId, tokenTier);
+  return effectiveWeightsForTier(base, tokenTier, recent);
+}
+
+export async function getPityStatusByTier(
+  userId: string
+): Promise<Record<RewardTier, SpinPityStatus>> {
+  const base = await getBaseSpinWeights(userId);
+  const status = {} as Record<RewardTier, SpinPityStatus>;
+
+  await Promise.all(
+    TIERS.map(async (tier) => {
+      status[tier] = await getPityStatusForTier(userId, tier, base);
+    })
+  );
+
+  return status;
+}
+
 export async function executeSpin(
   userId: string,
   tokenTier: RewardTier,
@@ -107,13 +166,7 @@ export async function executeSpin(
 ): Promise<SpinResult> {
   const timeZone = safeTimeZone(timeZoneInput);
 
-  const settingsRow = await prisma.dailySettings.findUnique({
-    where: { userId },
-    select: { spinOutcomeWeights: true },
-  });
-  const outcomeWeights = parseSpinOutcomeWeights(
-    settingsRow?.spinOutcomeWeights ?? DEFAULT_SPIN_OUTCOME_WEIGHTS
-  );
+  const outcomeWeights = await getBaseSpinWeights(userId);
 
   const spinCore = await prisma.$transaction(async (tx) => {
     const token = await spendOldestToken(tx, userId, tokenTier);
@@ -121,7 +174,11 @@ export async function executeSpin(
       throw Object.assign(new Error("No unspent token for this tier"), { status: 400 });
     }
 
-    let outcome = rollWeightedOutcome(outcomeWeights);
+    const recent = await recentSpinsForTier(userId, tokenTier, tx);
+    const consecutiveLosses = countConsecutivePityLosses(recent, tokenTier);
+    const rollWeights = applyPityToWeights(outcomeWeights, consecutiveLosses);
+
+    let outcome = rollWeightedOutcome(rollWeights);
     let effectiveTier = effectiveTierForOutcome(tokenTier, outcome);
 
     let reward: { id: string; label: string } | undefined;

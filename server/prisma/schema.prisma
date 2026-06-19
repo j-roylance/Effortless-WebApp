@@ -281,4 +281,5 @@ model SpinLog {
   user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, effectiveTier, createdAt])
+  @@index([userId, tokenTier, createdAt])
 }

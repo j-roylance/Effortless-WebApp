@@ -4,7 +4,7 @@
  */
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { RewardTier, TaskRewardKind } from "@prisma/client";
+import { RewardTier, SpinOutcome, TaskRewardKind } from "@prisma/client";
 import { BACKUP_FORMAT, BACKUP_VERSION } from "../src/domain/account-backup.js";
 import { dayKeyForTimezone, startOfLocalDayUtc } from "../src/domain/daily.js";
 import { conversionCount } from "../src/domain/like-conversions.js";
@@ -14,6 +14,12 @@ import {
   storageFromTaskRewards,
   taskRewardsFromLegacy,
 } from "../src/domain/rewards.js";
+import { DEFAULT_SPIN_OUTCOME_WEIGHTS } from "../src/domain/spin-odds.js";
+import {
+  applyPityToWeights,
+  countConsecutivePityLosses,
+  isPityLoss,
+} from "../src/domain/spin-pity.js";
 import { expiresAtForTier } from "../src/domain/tiers.js";
 import { prisma } from "../src/lib/prisma.js";
 import { exportAccountBackup, importAccountBackup } from "../src/services/account-backup.js";
@@ -24,7 +30,7 @@ import {
   logLikeGrant,
   splitLikeCredit,
 } from "../src/services/like-tracking.js";
-import { getScheduleStatus } from "../src/services/spin.js";
+import { getPityStatusForTier, getScheduleStatus } from "../src/services/spin.js";
 
 let failures = 0;
 
@@ -66,6 +72,52 @@ async function main() {
   assert(
     "expiresAtForTier month-end clamp",
     febClamp.toISOString() === "2025-02-28T12:00:00.000Z"
+  );
+
+  assert(
+    "isPityLoss Bronze LevelDown",
+    isPityLoss(RewardTier.Bronze, SpinOutcome.LevelDown)
+  );
+  assert(
+    "isPityLoss Silver LevelDown not loss",
+    !isPityLoss(RewardTier.Silver, SpinOutcome.LevelDown)
+  );
+  assert(
+    "countConsecutivePityLosses two None",
+    countConsecutivePityLosses(
+      [{ outcome: SpinOutcome.NoReward }, { outcome: SpinOutcome.NoReward }],
+      RewardTier.Bronze
+    ) === 2
+  );
+  assert(
+    "countConsecutivePityLosses stops at win",
+    countConsecutivePityLosses(
+      [{ outcome: SpinOutcome.NoReward }, { outcome: SpinOutcome.Win }],
+      RewardTier.Bronze
+    ) === 1
+  );
+
+  const base = DEFAULT_SPIN_OUTCOME_WEIGHTS;
+  const oneLoss = applyPityToWeights(base, 1);
+  assert(
+    "applyPity 1 loss doubles win",
+    oneLoss.win === 50 && oneLoss.levelUp === 25
+  );
+  assert(
+    "applyPity 1 loss sums to 100",
+    oneLoss.win + oneLoss.levelUp + oneLoss.noReward + oneLoss.levelDown === 100
+  );
+  const twoLoss = applyPityToWeights(base, 2);
+  assert(
+    "applyPity 2 losses max win",
+    twoLoss.win === 75 && twoLoss.noReward === 0 && twoLoss.levelDown === 0
+  );
+
+  const tight = { win: 40, levelUp: 30, noReward: 20, levelDown: 10 };
+  const tightOne = applyPityToWeights(tight, 1);
+  assert(
+    "applyPity partial double drains loss pool",
+    tightOne.win === 70 && tightOne.levelUp === 30 && tightOne.noReward === 0 && tightOne.levelDown === 0
   );
 
   const legacy = {
@@ -237,6 +289,28 @@ async function main() {
     const bronzeSchedule = schedule[RewardTier.Bronze];
     assert("schedule has canClaim", typeof bronzeSchedule?.canClaim === "boolean");
     assert("schedule has claimCount", typeof bronzeSchedule?.claimCount === "number");
+
+    await prisma.spinLog.createMany({
+      data: [
+        {
+          userId: user.id,
+          tokenTier: RewardTier.Bronze,
+          outcome: SpinOutcome.NoReward,
+          effectiveTier: RewardTier.Bronze,
+        },
+        {
+          userId: user.id,
+          tokenTier: RewardTier.Bronze,
+          outcome: SpinOutcome.NoReward,
+          effectiveTier: RewardTier.Bronze,
+        },
+      ],
+    });
+    const bronzePity = await getPityStatusForTier(user.id, RewardTier.Bronze, base);
+    assert(
+      "pity 2 Bronze losses maxes reward",
+      bronzePity.consecutiveLosses === 2 && bronzePity.effectiveWeights.win === 75
+    );
   } finally {
     await prisma.user.delete({ where: { id: user.id } });
   }

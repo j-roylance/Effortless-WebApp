@@ -603,8 +603,16 @@ h3,
 .token-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
   padding: 0.25rem 0;
   font-size: 0.9rem;
+}
+
+.spin-pity-hint {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  white-space: nowrap;
 }
 
 .like-section {
@@ -877,6 +885,16 @@ h3,
   flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
+}
+
+.task-reward-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.calendar-reward-glyphs .task-reward-token .spin-pity-hint {
+  font-size: 0.65rem;
 }
 
 .task-reward-chip {

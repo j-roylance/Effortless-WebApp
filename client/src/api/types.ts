@@ -59,12 +59,25 @@ export interface LikesResponse {
   trackingByTier: Record<RewardTier, LikeTrackingMeta>;
 }
 
+export interface SpinOutcomeWeights {
+  win: number;
+  levelUp: number;
+  noReward: number;
+  levelDown: number;
+}
+
+export interface SpinPityStatus {
+  consecutiveLosses: number;
+  effectiveWeights: SpinOutcomeWeights;
+}
+
 export interface TokenBalances {
   balances: Record<RewardTier, number>;
   schedule: Record<
     RewardTier,
     { claimCount: number; limit: number; canClaim: boolean }
   >;
+  pityByTier: Record<RewardTier, SpinPityStatus>;
 }
 
 export interface SpinWheelSlice {

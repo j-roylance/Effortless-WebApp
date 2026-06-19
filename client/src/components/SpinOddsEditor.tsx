@@ -13,14 +13,20 @@ export function SpinOddsEditor({
   onChange: (value: SpinOutcomeWeights) => void;
   lockedLevelUp?: number;
 }) {
-  const total = spinOddsTotal(value);
+  const effectiveValue =
+    lockedLevelUp !== undefined ? { ...value, levelUp: lockedLevelUp } : value;
+  const total = spinOddsTotal(effectiveValue);
   const totalValid = total === 100;
 
   function updateField(key: keyof SpinOutcomeWeights, raw: string) {
     if (key === "levelUp" && lockedLevelUp !== undefined) return;
     const parsed = raw === "" ? 0 : Number.parseInt(raw, 10);
     const next = Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 0;
-    onChange({ ...value, [key]: next });
+    onChange({
+      ...value,
+      [key]: next,
+      ...(lockedLevelUp !== undefined ? { levelUp: lockedLevelUp } : {}),
+    });
   }
 
   return (

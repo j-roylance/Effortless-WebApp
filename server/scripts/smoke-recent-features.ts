@@ -20,7 +20,9 @@ import {
   countConsecutivePityLosses,
   deriveDefaultPitySettings,
   isPityLoss,
+  parseSpinPitySettings,
   resolvePityWeights,
+  syncPityLevelUp,
   validateSpinPitySettings,
 } from "../src/domain/spin-pity.js";
 import { expiresAtForTier } from "../src/domain/tiers.js";
@@ -153,6 +155,30 @@ async function main() {
   assert(
     "deriveDefaultPitySettings matches algorithm",
     deriveDefaultPitySettings(base).maxLoss.win === 75
+  );
+
+  const customBase = { win: 30, levelUp: 15, noReward: 30, levelDown: 25 };
+  const migratedPity = parseSpinPitySettings(
+    {
+      enabled: true,
+      oneLoss: { win: 50, levelUp: 25, noReward: 12, levelDown: 13 },
+      maxLoss: { win: 75, levelUp: 25, noReward: 0, levelDown: 0 },
+    },
+    customBase
+  );
+  const syncedPity = syncPityLevelUp(customBase, migratedPity);
+  assert(
+    "syncPityLevelUp rebalances to 100",
+    syncedPity.oneLoss.win +
+      syncedPity.oneLoss.levelUp +
+      syncedPity.oneLoss.noReward +
+      syncedPity.oneLoss.levelDown ===
+      100 &&
+      syncedPity.maxLoss.win +
+        syncedPity.maxLoss.levelUp +
+        syncedPity.maxLoss.noReward +
+        syncedPity.maxLoss.levelDown ===
+        100
   );
 
   const legacy = {

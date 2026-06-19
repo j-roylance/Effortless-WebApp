@@ -118,14 +118,60 @@ export function parseSpinPitySettings(
   };
 }
 
+/** Keep a pity profile at 100% when Step up is synced to base odds. */
+export function rebalanceProfileLevelUp(
+  profile: SpinOutcomeWeights,
+  newLevelUp: number
+): SpinOutcomeWeights {
+  let { win, noReward, levelDown } = profile;
+  const levelUpDelta = newLevelUp - profile.levelUp;
+
+  if (levelUpDelta > 0) {
+    let remaining = levelUpDelta;
+    const pool = noReward + levelDown;
+    const fromPool = Math.min(remaining, pool);
+    if (fromPool > 0 && pool > 0) {
+      const noTake = Math.round((fromPool * noReward) / pool);
+      const downTake = fromPool - noTake;
+      noReward -= noTake;
+      levelDown -= downTake;
+      remaining -= fromPool;
+    }
+    win = Math.max(0, win - remaining);
+  } else if (levelUpDelta < 0) {
+    win = Math.max(0, win - levelUpDelta);
+  }
+
+  const rebalanced = normalizeWeights({
+    win,
+    levelUp: newLevelUp,
+    noReward,
+    levelDown,
+  });
+
+  const total =
+    rebalanced.win +
+    rebalanced.levelUp +
+    rebalanced.noReward +
+    rebalanced.levelDown;
+  if (total !== 100) {
+    return normalizeWeights({
+      ...rebalanced,
+      win: Math.max(0, rebalanced.win + (100 - total)),
+    });
+  }
+
+  return rebalanced;
+}
+
 export function syncPityLevelUp(
   base: SpinOutcomeWeights,
   pity: SpinPitySettings
 ): SpinPitySettings {
   return {
     ...pity,
-    oneLoss: { ...pity.oneLoss, levelUp: base.levelUp },
-    maxLoss: { ...pity.maxLoss, levelUp: base.levelUp },
+    oneLoss: rebalanceProfileLevelUp(pity.oneLoss, base.levelUp),
+    maxLoss: rebalanceProfileLevelUp(pity.maxLoss, base.levelUp),
   };
 }
 

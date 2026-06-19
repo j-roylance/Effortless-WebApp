@@ -1,4 +1,5 @@
 import type { LikeCredit, RewardTier } from "@prisma/client";
+import { SpinOutcome } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { safeTimeZone } from "../domain/daily.js";
 import {
@@ -174,6 +175,184 @@ export async function createLikeCredit(
     },
   });
   return { id: row.id };
+}
+
+const PRIZE_OUTCOMES: SpinOutcome[] = [
+  SpinOutcome.Win,
+  SpinOutcome.LevelUp,
+  SpinOutcome.LevelDown,
+];
+
+type ReplayEvent =
+  | { kind: "grant"; at: Date; likeId: string; tier: RewardTier; sourceId: string }
+  | { kind: "spin"; at: Date; likeId: string; tier: RewardTier; sourceId: string }
+  | {
+      kind: "ledger";
+      at: Date;
+      likeId: string;
+      tier: RewardTier;
+      delta: number;
+      sourceId: string;
+      ledgerKind: string;
+    };
+
+function availableCreditWhereAt(
+  userId: string,
+  likeId: string,
+  asOf: Date
+): Prisma.LikeCreditWhereInput {
+  return {
+    userId,
+    likeId,
+    earnedAt: { lte: asOf },
+    usedAt: null,
+    voidedAt: null,
+    expiresAt: { gt: asOf },
+  };
+}
+
+async function availableCreditIdsAt(
+  tx: Tx,
+  userId: string,
+  likeId: string,
+  asOf: Date,
+  take?: number
+): Promise<string[]> {
+  const rows = await tx.likeCredit.findMany({
+    where: availableCreditWhereAt(userId, likeId, asOf),
+    orderBy: { earnedAt: "asc" },
+    take,
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
+async function voidCreditsFifoAt(
+  tx: Tx,
+  userId: string,
+  likeId: string,
+  count: number,
+  asOf: Date
+): Promise<void> {
+  const ids = await availableCreditIdsAt(tx, userId, likeId, asOf, count);
+  if (ids.length < count) return;
+  await tx.likeCredit.updateMany({
+    where: { id: { in: ids } },
+    data: { voidedAt: asOf },
+  });
+}
+
+/** Rebuild LikeCredit rows from grant/spin/ledger history (for migration and v1 backup import). */
+export async function replayLikeCreditsForUser(
+  userId: string,
+  timeZoneInput: string,
+  tx: Tx = prisma
+): Promise<void> {
+  const timeZone = safeTimeZone(timeZoneInput);
+  const existing = await tx.likeCredit.count({ where: { userId } });
+  if (existing > 0) return;
+
+  const [grants, spins, ledger, likes] = await Promise.all([
+    tx.likeGrantLog.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+    tx.spinLog.findMany({
+      where: {
+        userId,
+        rewardId: { not: null },
+        outcome: { in: PRIZE_OUTCOMES },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    tx.likeCreditLedger.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+    tx.userReward.findMany({ where: { userId }, select: { id: true, tier: true } }),
+  ]);
+
+  if (grants.length === 0 && spins.length === 0 && ledger.length === 0) return;
+
+  const tierByLikeId = new Map(likes.map((l) => [l.id, l.tier]));
+  const events: ReplayEvent[] = [];
+
+  for (const grant of grants) {
+    events.push({
+      kind: "grant",
+      at: grant.createdAt,
+      likeId: grant.likeId,
+      tier: grant.tier,
+      sourceId: grant.id,
+    });
+  }
+
+  for (const spin of spins) {
+    if (!spin.rewardId) continue;
+    events.push({
+      kind: "spin",
+      at: spin.createdAt,
+      likeId: spin.rewardId,
+      tier: spin.effectiveTier,
+      sourceId: spin.id,
+    });
+  }
+
+  for (const row of ledger) {
+    const tier = tierByLikeId.get(row.likeId);
+    if (!tier) continue;
+    events.push({
+      kind: "ledger",
+      at: row.createdAt,
+      likeId: row.likeId,
+      tier,
+      delta: row.delta,
+      sourceId: row.id,
+      ledgerKind: row.kind,
+    });
+  }
+
+  events.sort((a, b) => a.at.getTime() - b.at.getTime());
+
+  for (const event of events) {
+    if (event.kind === "grant" || event.kind === "spin") {
+      await createLikeCredit(
+        tx,
+        userId,
+        event.likeId,
+        event.tier,
+        event.kind,
+        event.sourceId,
+        timeZone,
+        event.at
+      );
+    } else if (event.delta > 0) {
+      for (let i = 0; i < event.delta; i += 1) {
+        await createLikeCredit(
+          tx,
+          userId,
+          event.likeId,
+          event.tier,
+          event.ledgerKind,
+          event.sourceId,
+          timeZone,
+          event.at
+        );
+      }
+    } else if (event.delta < 0) {
+      await voidCreditsFifoAt(tx, userId, event.likeId, Math.abs(event.delta), event.at);
+    }
+  }
+
+  const usedRows = await tx.likeUsedCount.findMany({ where: { userId } });
+  const usedByLikeId = new Map<string, number>();
+  for (const row of usedRows) {
+    usedByLikeId.set(row.likeId, (usedByLikeId.get(row.likeId) ?? 0) + row.usedCount);
+  }
+
+  const now = new Date();
+  for (const [likeId, usedTotal] of usedByLikeId) {
+    const ids = await availableCreditIdsAt(tx, userId, likeId, now, usedTotal);
+    if (ids.length === 0) continue;
+    await tx.likeCredit.updateMany({
+      where: { id: { in: ids } },
+      data: { usedAt: now },
+    });
+  }
 }
 
 export function trackingMetaForTiers(): Record<RewardTier, LikeTrackingMeta> {

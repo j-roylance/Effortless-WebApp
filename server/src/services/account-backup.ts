@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { parseTaskRewards } from "../domain/rewards.js";
+import { replayLikeCreditsForUser } from "./like-tracking.js";
 import {
   AI_RECOVERY_GUIDE,
   BACKUP_FORMAT,
@@ -484,6 +485,10 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           createdAt: parseRequiredDate(row.createdAt, "dailyBonusClaim.createdAt"),
         })),
       });
+    }
+
+    if (data.likeCredits.length === 0) {
+      await replayLikeCreditsForUser(userId, "UTC", tx);
     }
   });
 }

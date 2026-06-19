@@ -61,6 +61,12 @@ async function main() {
     "expiresAtForTier Emperor +1 month",
     emperorExpiry.toISOString() === "2025-02-15T15:00:00.000Z"
   );
+  const jan31 = new Date("2025-01-31T12:00:00.000Z");
+  const febClamp = expiresAtForTier(jan31, RewardTier.Emperor, "UTC");
+  assert(
+    "expiresAtForTier month-end clamp",
+    febClamp.toISOString() === "2025-02-28T12:00:00.000Z"
+  );
 
   const legacy = {
     rewardKind: TaskRewardKind.Token,

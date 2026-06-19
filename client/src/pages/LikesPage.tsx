@@ -5,7 +5,7 @@ import type { LikesResponse, UserLike } from "../api/types";
 import {
   TIERS,
   TIER_COLORS,
-  TIER_FREQUENCY_LABEL,
+  TIER_USABLE_LIFETIME_LABEL,
   type RewardTier,
 } from "../domain/tiers";
 import {
@@ -107,7 +107,7 @@ export function LikesPage() {
   const schedule = tokenData?.schedule;
 
   function handleResetTier(tier: RewardTier) {
-    if (confirm(`Reset rewarded and used counts for all ${tier} likes this period?`)) {
+    if (confirm(`Reset all active ${tier} like credits for this tier?`)) {
       resetTierMutation.mutate(tier);
     }
   }
@@ -119,8 +119,9 @@ export function LikesPage() {
         Things you enjoy at each tier. Spend tokens to spin and maybe win one.
       </p>
       <p className="like-tracking-legend">
-        Per like: <strong>E</strong> earned · <strong>U</strong> used (− / +) ·{" "}
-        <strong>A</strong> available (split/combine)
+        Per like: <strong>E</strong> earned (available + used) · <strong>U</strong> used (− / +) ·{" "}
+        <strong>A</strong> available (split/combine). Each earned like expires individually after
+        its tier window.
       </p>
 
       {(likesError || tokensError) && (
@@ -186,7 +187,7 @@ export function LikesPage() {
                   className="neon-btn neon-btn-sm"
                   disabled={resetTierMutation.isPending}
                   onClick={() => handleResetTier(tier)}
-                  title="Reset rewarded and used counts for this tier"
+                  title="Reset active like credits for this tier"
                 >
                   Reset
                 </button>
@@ -207,10 +208,10 @@ export function LikesPage() {
                 </button>
               </div>
             </div>
-            <p className="like-freq">{TIER_FREQUENCY_LABEL[tier]}</p>
+            <p className="like-freq">{TIER_USABLE_LIFETIME_LABEL[tier]}</p>
             {schedule && (
               <p className="like-freq" style={{ marginTop: "-0.25rem" }}>
-                Claims: {schedule[tier].claimCount} / {schedule[tier].limit}
+                Spin claims: {schedule[tier].claimCount} / {schedule[tier].limit}
               </p>
             )}
 

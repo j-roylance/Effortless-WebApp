@@ -42,6 +42,20 @@ export const TIER_FREQUENCY_LABEL: Record<RewardTier, string> = {
   Galactic: "1× per year",
 };
 
+export const TIER_USABLE_LIFETIME_LABEL: Record<RewardTier, string> = {
+  Bronze: "Usable for 24 hours each",
+  Silver: "Usable for 24 hours each",
+  Gold: "Usable for 24 hours each",
+  Diamond: "Usable for 24 hours each",
+  Platinum: "Usable for 24 hours each",
+  Royal: "Usable for 7 days each",
+  King: "Usable for 7 days each",
+  Emperor: "Usable for 1 month each",
+  Planetary: "Usable for 1 month each",
+  Stellar: "Usable for 1 year each",
+  Galactic: "Usable for 1 year each",
+};
+
 export const TIER_COLORS: Record<RewardTier, string> = {
   Bronze: "#cd7f32",
   Silver: "#c0c0c0",

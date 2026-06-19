@@ -14,6 +14,7 @@ import {
 import { safeTimeZone } from "../domain/daily.js";
 import { prisma } from "../lib/prisma.js";
 import { getTokenBalances } from "./tokens.js";
+import { logSpinLikeWin } from "./like-tracking.js";
 import {
   buildWheelSlices,
   parseSliceCounts,
@@ -165,7 +166,7 @@ export async function executeSpin(
       }
     }
 
-    await tx.spinLog.create({
+    const spinLog = await tx.spinLog.create({
       data: {
         userId,
         tokenTier,
@@ -174,6 +175,18 @@ export async function executeSpin(
         rewardId: reward?.id ?? null,
       },
     });
+
+    if (reward?.id) {
+      await logSpinLikeWin(
+        tx,
+        userId,
+        reward.id,
+        effectiveTier,
+        spinLog.id,
+        timeZone,
+        spinLog.createdAt
+      );
+    }
 
     return {
       outcome,

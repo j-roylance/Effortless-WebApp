@@ -115,7 +115,8 @@ async function claimBonus(
   userId: string,
   dayKey: string,
   bonusType: DailyBonusType,
-  reward: MilestoneReward
+  reward: MilestoneReward,
+  timeZone: string
 ): Promise<ClaimResult | null> {
   const existing = await tx.dailyBonusClaim.findUnique({
     where: { userId_dayKey_bonusType: { userId, dayKey, bonusType } },
@@ -167,7 +168,7 @@ async function claimBonus(
       select: { tier: true },
     });
     if (like) {
-      await logLikeGrant(tx, userId, reward.likeId, like.tier, source);
+      await logLikeGrant(tx, userId, reward.likeId, like.tier, source, timeZone);
     }
   }
 
@@ -187,7 +188,7 @@ export async function claimPlanningBonus(
   if (settings.planningReward.kind === "none") return null;
 
   return prisma.$transaction((tx) =>
-    claimBonus(tx, userId, key, "planning", settings.planningReward)
+    claimBonus(tx, userId, key, "planning", settings.planningReward, timeZone)
   );
 }
 
@@ -228,7 +229,14 @@ export async function evaluateAchievementBonuses(
       settings.allMustsReward.kind !== "none" &&
       allMustsCompleteForDay(tasks, key, timeZone)
     ) {
-      const result = await claimBonus(tx, userId, key, "all_musts", settings.allMustsReward);
+      const result = await claimBonus(
+        tx,
+        userId,
+        key,
+        "all_musts",
+        settings.allMustsReward,
+        timeZone
+      );
       if (result?.token) bonusTokens.push(result.token);
       if (result?.definiteReward) {
         bonusRewards.push({
@@ -247,7 +255,8 @@ export async function evaluateAchievementBonuses(
         userId,
         key,
         "all_do_dates",
-        settings.allDoDatesReward
+        settings.allDoDatesReward,
+        timeZone
       );
       if (result?.token) bonusTokens.push(result.token);
       if (result?.definiteReward) {

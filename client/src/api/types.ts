@@ -51,8 +51,7 @@ export interface UserLike {
 }
 
 export interface LikeTrackingMeta {
-  bucketKey: string;
-  periodLabel: string;
+  usableLifetimeLabel: string;
 }
 
 export interface LikesResponse {

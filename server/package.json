@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
+    "migrate:like-credits": "tsx scripts/migrate-like-credits.ts",
     "smoke:recent": "tsx scripts/smoke-recent-features.ts"
   },
   "dependencies": {

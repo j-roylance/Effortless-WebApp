@@ -4,6 +4,8 @@
  */
 import { RewardTier } from "@prisma/client";
 import {
+  addCalendarMonthsInTimezone,
+  addCalendarYearsInTimezone,
   dayKeyForTimezone,
   safeTimeZone,
   startOfLocalDayUtc,
@@ -72,6 +74,42 @@ export function tierDown(tier: RewardTier): RewardTier {
 
 export function isValidTier(value: string): value is RewardTier {
   return (TIERS as string[]).includes(value);
+}
+
+export const TIER_USABLE_LIFETIME_LABEL: Record<RewardTier, string> = {
+  [RewardTier.Bronze]: "Usable for 24 hours each",
+  [RewardTier.Silver]: "Usable for 24 hours each",
+  [RewardTier.Gold]: "Usable for 24 hours each",
+  [RewardTier.Diamond]: "Usable for 24 hours each",
+  [RewardTier.Platinum]: "Usable for 24 hours each",
+  [RewardTier.Royal]: "Usable for 7 days each",
+  [RewardTier.King]: "Usable for 7 days each",
+  [RewardTier.Emperor]: "Usable for 1 month each",
+  [RewardTier.Planetary]: "Usable for 1 month each",
+  [RewardTier.Stellar]: "Usable for 1 year each",
+  [RewardTier.Galactic]: "Usable for 1 year each",
+};
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** Rolling expiry instant for one earned like credit. */
+export function expiresAtForTier(
+  earnedAt: Date,
+  tier: RewardTier,
+  timeZoneInput: string
+): Date {
+  const timeZone = safeTimeZone(timeZoneInput);
+  const { bucket } = TIER_LIMITS[tier];
+  if (bucket === "day") {
+    return new Date(earnedAt.getTime() + MS_PER_DAY);
+  }
+  if (bucket === "week") {
+    return new Date(earnedAt.getTime() + 7 * MS_PER_DAY);
+  }
+  if (bucket === "month") {
+    return addCalendarMonthsInTimezone(earnedAt, 1, timeZone);
+  }
+  return addCalendarYearsInTimezone(earnedAt, 1, timeZone);
 }
 
 function startOfBucket(date: Date, bucket: Bucket, timeZone: string): Date {

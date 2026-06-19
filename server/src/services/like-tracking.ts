@@ -1,5 +1,4 @@
-import type { RewardTier, UserReward } from "@prisma/client";
-import { SpinOutcome } from "@prisma/client";
+import type { LikeCredit, RewardTier } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { safeTimeZone } from "../domain/daily.js";
 import {
@@ -10,18 +9,16 @@ import {
 } from "../domain/like-conversions.js";
 import {
   TIERS,
-  TIER_FREQUENCY_LABEL,
+  TIER_USABLE_LIFETIME_LABEL,
   bucketKeyForTier,
-  bucketStartForTier,
-  tierUp,
+  expiresAtForTier,
 } from "../domain/tiers.js";
 import { prisma } from "../lib/prisma.js";
 
 type Tx = Prisma.TransactionClient;
 
 export interface LikeTrackingMeta {
-  bucketKey: string;
-  periodLabel: string;
+  usableLifetimeLabel: string;
 }
 
 export interface LikeWithTracking {
@@ -42,133 +39,148 @@ export interface LikeAllocation {
   count: number;
 }
 
-async function effectiveStartForTier(
-  userId: string,
-  tier: RewardTier,
-  bucketKey: string,
-  timeZone: string,
-  now: Date,
-  tx: Tx = prisma
-): Promise<Date> {
-  const periodStart = bucketStartForTier(tier, now, timeZone);
-  const reset = await tx.tierLikeReset.findUnique({
-    where: { userId_tier_bucketKey: { userId, tier, bucketKey } },
-  });
-  if (!reset) return periodStart;
-  return reset.resetAt > periodStart ? reset.resetAt : periodStart;
-}
-
-async function rewardedCountForLike(
-  userId: string,
-  likeId: string,
-  tier: RewardTier,
-  effectiveStart: Date,
-  tx: Tx = prisma
-): Promise<number> {
-  const prizeOutcomes: SpinOutcome[] = [
-    SpinOutcome.Win,
-    SpinOutcome.LevelUp,
-    SpinOutcome.LevelDown,
-  ];
-  const [spinCount, grantCount] = await Promise.all([
-    tx.spinLog.count({
-      where: {
-        userId,
-        rewardId: likeId,
-        effectiveTier: tier,
-        outcome: { in: prizeOutcomes },
-        createdAt: { gte: effectiveStart },
-      },
-    }),
-    tx.likeGrantLog.count({
-      where: {
-        userId,
-        likeId,
-        createdAt: { gte: effectiveStart },
-      },
-    }),
-  ]);
-  return spinCount + grantCount;
-}
-
-async function ledgerCreditsForLike(
-  userId: string,
-  likeId: string,
-  bucketKey: string,
-  tx: Tx = prisma
-): Promise<number> {
-  const result = await tx.likeCreditLedger.aggregate({
-    where: { userId, likeId, bucketKey, delta: { gt: 0 } },
-    _sum: { delta: true },
-  });
-  return result._sum.delta ?? 0;
-}
-
-async function ledgerDeltaForLike(
-  userId: string,
-  likeId: string,
-  bucketKey: string,
-  tx: Tx = prisma
-): Promise<number> {
-  const result = await tx.likeCreditLedger.aggregate({
-    where: { userId, likeId, bucketKey },
-    _sum: { delta: true },
-  });
-  return result._sum.delta ?? 0;
-}
-
-async function availableForLike(
-  userId: string,
-  like: UserReward,
-  bucketKey: string,
-  timeZone: string,
-  now: Date,
-  usedByLikeId: Map<string, number>,
-  ledgerByLikeId: Map<string, number>,
-  ledgerCreditsByLikeId: Map<string, number>,
-  tx: Tx = prisma
-): Promise<{
-  rewardedCount: number;
-  awardedCount: number;
-  usedCount: number;
-  ledgerDelta: number;
+export interface LikeCreditCounts {
   availableCount: number;
-}> {
-  const effectiveStart = await effectiveStartForTier(
-    userId,
-    like.tier,
-    bucketKey,
-    timeZone,
-    now,
-    tx
-  );
-  const rewardedCount = await rewardedCountForLike(
-    userId,
-    like.id,
-    like.tier,
-    effectiveStart,
-    tx
-  );
-  const usedCount = usedByLikeId.get(`${like.id}:${bucketKey}`) ?? 0;
-  const ledgerDelta =
-    ledgerByLikeId.get(`${like.id}:${bucketKey}`) ??
-    (await ledgerDeltaForLike(userId, like.id, bucketKey, tx));
-  const ledgerCredits =
-    ledgerCreditsByLikeId.get(`${like.id}:${bucketKey}`) ??
-    (await ledgerCreditsForLike(userId, like.id, bucketKey, tx));
-  const awardedCount = rewardedCount + ledgerCredits;
-  const availableCount = rewardedCount - usedCount + ledgerDelta;
-  return { rewardedCount, awardedCount, usedCount, ledgerDelta, availableCount };
+  usedCount: number;
+  rewardedCount: number;
 }
 
-export function trackingMetaForTiers(timeZoneInput: string): Record<RewardTier, LikeTrackingMeta> {
+function availableCreditWhere(
+  userId: string,
+  likeId: string,
+  now: Date
+): Prisma.LikeCreditWhereInput {
+  return {
+    userId,
+    likeId,
+    usedAt: null,
+    voidedAt: null,
+    expiresAt: { gt: now },
+  };
+}
+
+function usedCreditWhere(userId: string, likeId: string): Prisma.LikeCreditWhereInput {
+  return {
+    userId,
+    likeId,
+    usedAt: { not: null },
+    voidedAt: null,
+  };
+}
+
+export async function countLikeCredits(
+  userId: string,
+  likeId: string,
+  now: Date,
+  tx: Tx = prisma
+): Promise<LikeCreditCounts> {
+  const [availableCount, usedCount] = await Promise.all([
+    tx.likeCredit.count({ where: availableCreditWhere(userId, likeId, now) }),
+    tx.likeCredit.count({ where: usedCreditWhere(userId, likeId) }),
+  ]);
+  const rewardedCount = availableCount + usedCount;
+  return { availableCount, usedCount, rewardedCount };
+}
+
+async function availableCreditsFifo(
+  tx: Tx,
+  userId: string,
+  likeId: string,
+  now: Date,
+  take: number
+): Promise<LikeCredit[]> {
+  return tx.likeCredit.findMany({
+    where: availableCreditWhere(userId, likeId, now),
+    orderBy: { earnedAt: "asc" },
+    take,
+  });
+}
+
+async function voidOldestAvailableCredits(
+  tx: Tx,
+  userId: string,
+  likeId: string,
+  count: number,
+  now: Date
+): Promise<void> {
+  const credits = await availableCreditsFifo(tx, userId, likeId, now, count);
+  if (credits.length < count) {
+    throw new Error("Not enough available credits");
+  }
+  await tx.likeCredit.updateMany({
+    where: { id: { in: credits.map((c) => c.id) } },
+    data: { voidedAt: now },
+  });
+}
+
+async function markUsedFifo(
+  tx: Tx,
+  userId: string,
+  likeId: string,
+  count: number,
+  now: Date
+): Promise<void> {
+  const credits = await availableCreditsFifo(tx, userId, likeId, now, count);
+  if (credits.length < count) {
+    throw new Error("Not enough available credits to mark used");
+  }
+  await tx.likeCredit.updateMany({
+    where: { id: { in: credits.map((c) => c.id) } },
+    data: { usedAt: now },
+  });
+}
+
+async function unmarkUsedFifo(
+  tx: Tx,
+  userId: string,
+  likeId: string,
+  count: number
+): Promise<void> {
+  const credits = await tx.likeCredit.findMany({
+    where: usedCreditWhere(userId, likeId),
+    orderBy: { usedAt: "desc" },
+    take: count,
+  });
+  if (credits.length < count) {
+    throw new Error("Not enough used credits to unmark");
+  }
+  await tx.likeCredit.updateMany({
+    where: { id: { in: credits.map((c) => c.id) } },
+    data: { usedAt: null },
+  });
+}
+
+export async function createLikeCredit(
+  tx: Tx,
+  userId: string,
+  likeId: string,
+  tier: RewardTier,
+  source: string,
+  sourceId: string | null,
+  timeZoneInput: string,
+  earnedAt: Date = new Date()
+): Promise<{ id: string }> {
   const timeZone = safeTimeZone(timeZoneInput);
-  const now = new Date();
+  const expiresAt = expiresAtForTier(earnedAt, tier, timeZone);
+  const row = await tx.likeCredit.create({
+    data: {
+      userId,
+      likeId,
+      tier,
+      earnedAt,
+      expiresAt,
+      source,
+      sourceId,
+    },
+  });
+  return { id: row.id };
+}
+
+export function trackingMetaForTiers(): Record<RewardTier, LikeTrackingMeta> {
   const meta = {} as Record<RewardTier, LikeTrackingMeta>;
   for (const tier of TIERS) {
     meta[tier] = {
-      bucketKey: bucketKeyForTier(tier, timeZone, now),
-      periodLabel: TIER_FREQUENCY_LABEL[tier],
+      usableLifetimeLabel: TIER_USABLE_LIFETIME_LABEL[tier],
     };
   }
   return meta;
@@ -182,9 +194,8 @@ export async function likesWithTracking(
   likes: LikeWithTracking[];
   trackingByTier: Record<RewardTier, LikeTrackingMeta>;
 }> {
-  const timeZone = safeTimeZone(timeZoneInput);
   const now = new Date();
-  const trackingByTier = trackingMetaForTiers(timeZoneInput);
+  const trackingByTier = trackingMetaForTiers();
 
   const where: { userId: string; tier?: RewardTier } = { userId };
   if (tierFilter) where.tier = tierFilter;
@@ -194,82 +205,50 @@ export async function likesWithTracking(
     orderBy: [{ tier: "asc" }, { createdAt: "asc" }],
   });
 
-  const usedRows = await prisma.likeUsedCount.findMany({
+  const availableRows = await prisma.likeCredit.groupBy({
+    by: ["likeId"],
     where: {
       userId,
-      OR: TIERS.map((tier) => ({
-        bucketKey: trackingByTier[tier].bucketKey,
-        like: { tier },
-      })),
+      voidedAt: null,
+      usedAt: null,
+      expiresAt: { gt: now },
     },
+    _count: { _all: true },
   });
 
-  const usedByLikeId = new Map(
-    usedRows.map((row) => [`${row.likeId}:${row.bucketKey}`, row.usedCount])
-  );
-
-  const ledgerRows = await prisma.likeCreditLedger.groupBy({
-    by: ["likeId", "bucketKey"],
+  const usedRows = await prisma.likeCredit.groupBy({
+    by: ["likeId"],
     where: {
       userId,
-      OR: TIERS.map((tier) => ({
-        bucketKey: trackingByTier[tier].bucketKey,
-        like: { tier },
-      })),
+      voidedAt: null,
+      usedAt: { not: null },
     },
-    _sum: { delta: true },
+    _count: { _all: true },
   });
 
-  const ledgerByLikeId = new Map(
-    ledgerRows.map((row) => [`${row.likeId}:${row.bucketKey}`, row._sum.delta ?? 0])
+  const availableByLikeId = new Map(
+    availableRows.map((row) => [row.likeId, row._count._all])
   );
+  const usedByLikeId = new Map(usedRows.map((row) => [row.likeId, row._count._all]));
 
-  const ledgerCreditRows = await prisma.likeCreditLedger.groupBy({
-    by: ["likeId", "bucketKey"],
-    where: {
-      userId,
-      delta: { gt: 0 },
-      OR: TIERS.map((tier) => ({
-        bucketKey: trackingByTier[tier].bucketKey,
-        like: { tier },
-      })),
-    },
-    _sum: { delta: true },
-  });
+  const result: LikeWithTracking[] = likes.map((like) => {
+    const availableCount = availableByLikeId.get(like.id) ?? 0;
+    const usedCount = usedByLikeId.get(like.id) ?? 0;
+    const rewardedCount = availableCount + usedCount;
 
-  const ledgerCreditsByLikeId = new Map(
-    ledgerCreditRows.map((row) => [`${row.likeId}:${row.bucketKey}`, row._sum.delta ?? 0])
-  );
-
-  const result: LikeWithTracking[] = [];
-
-  for (const like of likes) {
-    const bucketKey = trackingByTier[like.tier].bucketKey;
-    const { rewardedCount, awardedCount, usedCount, ledgerDelta, availableCount } =
-      await availableForLike(
-      userId,
-      like,
-      bucketKey,
-      timeZone,
-      now,
-      usedByLikeId,
-      ledgerByLikeId,
-      ledgerCreditsByLikeId
-    );
-
-    result.push({
+    return {
       id: like.id,
       userId: like.userId,
       tier: like.tier,
       label: like.label,
       createdAt: like.createdAt.toISOString(),
       rewardedCount,
-      awardedCount,
+      awardedCount: rewardedCount,
       usedCount,
-      ledgerDelta,
+      ledgerDelta: 0,
       availableCount,
-    });
-  }
+    };
+  });
 
   return { likes: result, trackingByTier };
 }
@@ -279,11 +258,43 @@ export async function logLikeGrant(
   userId: string,
   likeId: string,
   tier: RewardTier,
-  source: string
+  source: string,
+  timeZoneInput: string
 ): Promise<void> {
-  await tx.likeGrantLog.create({
+  const grant = await tx.likeGrantLog.create({
     data: { userId, likeId, tier, source },
   });
+  await createLikeCredit(
+    tx,
+    userId,
+    likeId,
+    tier,
+    "grant",
+    grant.id,
+    timeZoneInput,
+    grant.createdAt
+  );
+}
+
+export async function logSpinLikeWin(
+  tx: Tx,
+  userId: string,
+  likeId: string,
+  tier: RewardTier,
+  spinLogId: string,
+  timeZoneInput: string,
+  earnedAt: Date
+): Promise<void> {
+  await createLikeCredit(
+    tx,
+    userId,
+    likeId,
+    tier,
+    "spin",
+    spinLogId,
+    timeZoneInput,
+    earnedAt
+  );
 }
 
 export async function adjustLikeUsedCount(
@@ -293,34 +304,37 @@ export async function adjustLikeUsedCount(
   delta?: number,
   usedCount?: number
 ): Promise<{ usedCount: number }> {
-  const timeZone = safeTimeZone(timeZoneInput);
+  void timeZoneInput;
   const like = await prisma.userReward.findFirst({
     where: { id: likeId, userId },
   });
   if (!like) throw Object.assign(new Error("Not found"), { status: 404 });
 
-  const bucketKey = bucketKeyForTier(like.tier, timeZone);
-  const existing = await prisma.likeUsedCount.findUnique({
-    where: { userId_likeId_bucketKey: { userId, likeId, bucketKey } },
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    const current = await tx.likeCredit.count({
+      where: usedCreditWhere(userId, likeId),
+    });
+
+    let target: number;
+    if (usedCount !== undefined) {
+      target = Math.max(0, Math.floor(usedCount));
+    } else if (delta !== undefined) {
+      target = Math.max(0, current + delta);
+    } else {
+      throw new Error("Provide delta or usedCount");
+    }
+
+    if (target > current) {
+      await markUsedFifo(tx, userId, likeId, target - current, now);
+    } else if (target < current) {
+      await unmarkUsedFifo(tx, userId, likeId, current - target);
+    }
   });
-  const current = existing?.usedCount ?? 0;
 
-  let next: number;
-  if (usedCount !== undefined) {
-    next = Math.max(0, Math.floor(usedCount));
-  } else if (delta !== undefined) {
-    next = Math.max(0, current + delta);
-  } else {
-    throw new Error("Provide delta or usedCount");
-  }
-
-  const row = await prisma.likeUsedCount.upsert({
-    where: { userId_likeId_bucketKey: { userId, likeId, bucketKey } },
-    create: { userId, likeId, bucketKey, usedCount: next },
-    update: { usedCount: next },
-  });
-
-  return { usedCount: row.usedCount };
+  const { usedCount: next } = await countLikeCredits(userId, likeId, now);
+  return { usedCount: next };
 }
 
 function validateAllocations(
@@ -346,67 +360,6 @@ function validateAllocations(
   }
 
   return normalized;
-}
-
-async function deletePairedLedgerLegs(
-  tx: Tx,
-  userId: string,
-  tier: RewardTier,
-  bucketKey: string,
-  likeIds: string[],
-  timeZone: string
-): Promise<void> {
-  const rowsToDelete = await tx.likeCreditLedger.findMany({
-    where: { userId, bucketKey, likeId: { in: likeIds } },
-  });
-  if (rowsToDelete.length === 0) return;
-
-  const lowerTier = lowerTierFor(tier);
-  const lowerBucketKey = bucketKeyForTier(lowerTier, timeZone);
-  const upperTier = tierUp(tier);
-  const upperBucketKey = bucketKeyForTier(upperTier, timeZone);
-
-  const pairedFilters: Prisma.LikeCreditLedgerWhereInput[] = [];
-
-  for (const row of rowsToDelete) {
-    if (row.kind === "split" && row.delta < 0) {
-      pairedFilters.push({
-        userId,
-        bucketKey: lowerBucketKey,
-        kind: "split",
-        delta: { gt: 0 },
-        createdAt: row.createdAt,
-      });
-    } else if (row.kind === "split" && row.delta > 0) {
-      pairedFilters.push({
-        userId,
-        bucketKey: upperBucketKey,
-        kind: "split",
-        delta: { lt: 0 },
-        createdAt: row.createdAt,
-      });
-    } else if (row.kind === "combine" && row.delta < 0) {
-      pairedFilters.push({
-        userId,
-        bucketKey: upperBucketKey,
-        kind: "combine",
-        delta: { gt: 0 },
-        createdAt: row.createdAt,
-      });
-    } else if (row.kind === "combine" && row.delta > 0) {
-      pairedFilters.push({
-        userId,
-        bucketKey: lowerBucketKey,
-        kind: "combine",
-        delta: { lt: 0 },
-        createdAt: row.createdAt,
-      });
-    }
-  }
-
-  if (pairedFilters.length > 0) {
-    await tx.likeCreditLedger.deleteMany({ where: { OR: pairedFilters } });
-  }
 }
 
 export async function splitLikeCredit(
@@ -447,20 +400,12 @@ export async function splitLikeCredit(
   }
 
   await prisma.$transaction(async (tx) => {
-    const sourceAvailable = await availableForLike(
-      userId,
-      source,
-      sourceBucketKey,
-      timeZone,
-      now,
-      new Map(),
-      new Map(),
-      new Map(),
-      tx
-    );
-    if (sourceAvailable.availableCount < 1) {
+    const { availableCount } = await countLikeCredits(userId, source.id, now, tx);
+    if (availableCount < 1) {
       throw new Error("Not enough available credits to split");
     }
+
+    await voidOldestAvailableCredits(tx, userId, source.id, 1, now);
 
     await tx.likeCreditLedger.create({
       data: {
@@ -473,7 +418,7 @@ export async function splitLikeCredit(
     });
 
     for (const { likeId, count } of normalized) {
-      await tx.likeCreditLedger.create({
+      const ledger = await tx.likeCreditLedger.create({
         data: {
           userId,
           likeId,
@@ -482,6 +427,19 @@ export async function splitLikeCredit(
           kind: "split",
         },
       });
+
+      for (let i = 0; i < count; i += 1) {
+        await createLikeCredit(
+          tx,
+          userId,
+          likeId,
+          lowerTier,
+          "split",
+          ledger.id,
+          timeZoneInput,
+          now
+        );
+      }
     }
   });
 }
@@ -526,59 +484,17 @@ export async function combineLikeCredits(
   }
 
   await prisma.$transaction(async (tx) => {
-    const usedRows = await tx.likeUsedCount.findMany({
-      where: {
-        userId,
-        likeId: { in: sourceIds },
-        bucketKey: lowerBucketKey,
-      },
-    });
-    const usedByLikeId = new Map(
-      usedRows.map((row) => [`${row.likeId}:${row.bucketKey}`, row.usedCount])
-    );
-
-    const ledgerRows = await tx.likeCreditLedger.groupBy({
-      by: ["likeId", "bucketKey"],
-      where: { userId, likeId: { in: sourceIds }, bucketKey: lowerBucketKey },
-      _sum: { delta: true },
-    });
-    const ledgerByLikeId = new Map(
-      ledgerRows.map((row) => [`${row.likeId}:${row.bucketKey}`, row._sum.delta ?? 0])
-    );
-
-    const ledgerCreditRows = await tx.likeCreditLedger.groupBy({
-      by: ["likeId", "bucketKey"],
-      where: {
-        userId,
-        likeId: { in: sourceIds },
-        bucketKey: lowerBucketKey,
-        delta: { gt: 0 },
-      },
-      _sum: { delta: true },
-    });
-    const ledgerCreditsByLikeId = new Map(
-      ledgerCreditRows.map((row) => [`${row.likeId}:${row.bucketKey}`, row._sum.delta ?? 0])
-    );
-
     for (const { likeId, count } of normalized) {
       const source = sourceById.get(likeId)!;
-      const { availableCount } = await availableForLike(
-        userId,
-        source,
-        lowerBucketKey,
-        timeZone,
-        now,
-        usedByLikeId,
-        ledgerByLikeId,
-        ledgerCreditsByLikeId,
-        tx
-      );
+      const { availableCount } = await countLikeCredits(userId, source.id, now, tx);
       if (availableCount < count) {
         throw new Error(`Not enough available credits on "${source.label}"`);
       }
     }
 
     for (const { likeId, count } of normalized) {
+      await voidOldestAvailableCredits(tx, userId, likeId, count, now);
+
       await tx.likeCreditLedger.create({
         data: {
           userId,
@@ -590,7 +506,7 @@ export async function combineLikeCredits(
       });
     }
 
-    await tx.likeCreditLedger.create({
+    const targetLedger = await tx.likeCreditLedger.create({
       data: {
         userId,
         likeId: target.id,
@@ -599,6 +515,17 @@ export async function combineLikeCredits(
         kind: "combine",
       },
     });
+
+    await createLikeCredit(
+      tx,
+      userId,
+      target.id,
+      target.tier,
+      "combine",
+      targetLedger.id,
+      timeZoneInput,
+      now
+    );
   });
 }
 
@@ -625,20 +552,13 @@ export async function resetTierLikeTracking(
 
     if (likes.length > 0) {
       const likeIds = likes.map((l) => l.id);
-      await deletePairedLedgerLegs(tx, userId, tier, bucketKey, likeIds, timeZone);
-      await tx.likeUsedCount.deleteMany({
+      await tx.likeCredit.updateMany({
         where: {
           userId,
-          bucketKey,
           likeId: { in: likeIds },
+          voidedAt: null,
         },
-      });
-      await tx.likeCreditLedger.deleteMany({
-        where: {
-          userId,
-          bucketKey,
-          likeId: { in: likeIds },
-        },
+        data: { voidedAt: now },
       });
     }
   });

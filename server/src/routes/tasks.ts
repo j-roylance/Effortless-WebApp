@@ -594,7 +594,8 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
           req.user!.userId,
           reward.likeId,
           like.tier,
-          "task_achieve"
+          "task_achieve",
+          timeZone
         );
         definiteRewards.push({ label: like.label });
       } else if (reward.kind === "custom") {

@@ -14,9 +14,16 @@ import {
   storageFromTaskRewards,
   taskRewardsFromLegacy,
 } from "../src/domain/rewards.js";
+import { expiresAtForTier } from "../src/domain/tiers.js";
 import { prisma } from "../src/lib/prisma.js";
 import { exportAccountBackup, importAccountBackup } from "../src/services/account-backup.js";
-import { likesWithTracking, combineLikeCredits, splitLikeCredit } from "../src/services/like-tracking.js";
+import {
+  adjustLikeUsedCount,
+  likesWithTracking,
+  combineLikeCredits,
+  logLikeGrant,
+  splitLikeCredit,
+} from "../src/services/like-tracking.js";
 import { getScheduleStatus } from "../src/services/spin.js";
 
 let failures = 0;
@@ -42,6 +49,18 @@ async function main() {
   assert("conversionCount Silver", conversionCount(RewardTier.Silver) === 2);
   assert("conversionCount Royal", conversionCount(RewardTier.Royal) === 3);
   assert("conversionCount Stellar", conversionCount(RewardTier.Stellar) === 6);
+
+  const earned = new Date("2025-01-15T15:00:00.000Z");
+  const bronzeExpiry = expiresAtForTier(earned, RewardTier.Bronze, "UTC");
+  assert(
+    "expiresAtForTier Bronze +24h",
+    bronzeExpiry.getTime() === earned.getTime() + 24 * 60 * 60 * 1000
+  );
+  const emperorExpiry = expiresAtForTier(earned, RewardTier.Emperor, "UTC");
+  assert(
+    "expiresAtForTier Emperor +1 month",
+    emperorExpiry.toISOString() === "2025-02-15T15:00:00.000Z"
+  );
 
   const legacy = {
     rewardKind: TaskRewardKind.Token,
@@ -97,22 +116,17 @@ async function main() {
       data: { userId: user.id, tier: RewardTier.Silver, label: "Smoke Silver" },
     });
 
-    await prisma.likeGrantLog.create({
-      data: {
-        userId: user.id,
-        likeId: silverLike.id,
-        tier: RewardTier.Silver,
-        source: "smoke_test",
-      },
-    });
+    await prisma.$transaction((tx) =>
+      logLikeGrant(tx, user.id, silverLike.id, RewardTier.Silver, "smoke_test", "UTC")
+    );
 
     const tracking = await likesWithTracking(user.id, "UTC");
     const silver = tracking.likes.find((l) => l.id === silverLike.id);
     assert("likesWithTracking availableCount", silver?.availableCount === 1);
-    assert("likesWithTracking awardedCount from grant", silver?.awardedCount === 1);
+    assert("likesWithTracking earned from grant", silver?.rewardedCount === 1);
     assert(
-      "likesWithTracking has ledgerDelta",
-      typeof silver?.ledgerDelta === "number"
+      "tracking meta usable lifetime",
+      tracking.trackingByTier[RewardTier.Silver].usableLifetimeLabel.includes("24 hours")
     );
 
     await splitLikeCredit(
@@ -129,9 +143,9 @@ async function main() {
     const silverAfter = afterSplit.likes.find((l) => l.id === silverLike.id);
     const bronzeAfter = afterSplit.likes.find((l) => l.id === bronzeLike.id);
     assert("split reduces silver available", silverAfter?.availableCount === 0);
-    assert("split keeps silver awarded", silverAfter?.awardedCount === 1);
+    assert("split zeroes silver earned", silverAfter?.rewardedCount === 0);
     assert("split credits bronze available", bronzeAfter?.availableCount === 1);
-    assert("split credits bronze awarded", bronzeAfter?.awardedCount === 1);
+    assert("split credits bronze earned", bronzeAfter?.rewardedCount === 1);
 
     await combineLikeCredits(
       user.id,
@@ -146,7 +160,23 @@ async function main() {
     const afterCombine = await likesWithTracking(user.id, "UTC");
     const silverCombined = afterCombine.likes.find((l) => l.id === silverLike.id);
     assert("combine restores silver available", silverCombined?.availableCount === 1);
-    assert("combine increments silver awarded", silverCombined?.awardedCount === 2);
+    assert("combine silver earned", silverCombined?.rewardedCount === 1);
+
+    await adjustLikeUsedCount(user.id, silverLike.id, "UTC", 1);
+    const afterUsed = await likesWithTracking(user.id, "UTC");
+    const silverUsed = afterUsed.likes.find((l) => l.id === silverLike.id);
+    assert("mark used reduces available", silverUsed?.availableCount === 0);
+    assert("mark used increments used", silverUsed?.usedCount === 1);
+    assert("earned stays after use", silverUsed?.rewardedCount === 1);
+
+    await prisma.likeCredit.updateMany({
+      where: { userId: user.id, likeId: silverLike.id },
+      data: { expiresAt: new Date("2020-01-01T00:00:00.000Z") },
+    });
+    const afterExpiry = await likesWithTracking(user.id, "UTC");
+    const silverExpired = afterExpiry.likes.find((l) => l.id === silverLike.id);
+    assert("expired credit drops available", silverExpired?.availableCount === 0);
+    assert("used credit stays in earned", silverExpired?.rewardedCount === 1);
 
     await prisma.habit.create({
       data: {
@@ -166,10 +196,12 @@ async function main() {
     assert("backup version", exported.version === BACKUP_VERSION);
     assert("backup has aiRecoveryGuide", exported.aiRecoveryGuide.length > 100);
     assert("backup likes count", exported.data.likes.length === 3);
+    assert("backup likeCredits count", exported.data.likeCredits.length > 0);
 
     const countsBefore = {
       likes: await prisma.userReward.count({ where: { userId: user.id } }),
       tasks: await prisma.habit.count({ where: { userId: user.id } }),
+      credits: await prisma.likeCredit.count({ where: { userId: user.id } }),
     };
 
     await importAccountBackup(user.id, exported);
@@ -177,6 +209,7 @@ async function main() {
     const countsAfter = {
       likes: await prisma.userReward.count({ where: { userId: user.id } }),
       tasks: await prisma.habit.count({ where: { userId: user.id } }),
+      credits: await prisma.likeCredit.count({ where: { userId: user.id } }),
     };
     assert(
       "backup round-trip likes",
@@ -187,6 +220,11 @@ async function main() {
       "backup round-trip tasks",
       countsAfter.tasks === countsBefore.tasks,
       `${countsAfter.tasks} vs ${countsBefore.tasks}`
+    );
+    assert(
+      "backup round-trip likeCredits",
+      countsAfter.credits === countsBefore.credits,
+      `${countsAfter.credits} vs ${countsBefore.credits}`
     );
 
     const schedule = await getScheduleStatus(user.id, "UTC");

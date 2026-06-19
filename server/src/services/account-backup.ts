@@ -27,6 +27,7 @@ export async function exportAccountBackup(
     tierLikeResets,
     likeGrantLogs,
     likeCreditLedger,
+    likeCredits,
     dailyBonusClaims,
   ] = await Promise.all([
     prisma.userReward.findMany({ where: { userId } }),
@@ -41,6 +42,7 @@ export async function exportAccountBackup(
     prisma.tierLikeReset.findMany({ where: { userId } }),
     prisma.likeGrantLog.findMany({ where: { userId } }),
     prisma.likeCreditLedger.findMany({ where: { userId } }),
+    prisma.likeCredit.findMany({ where: { userId } }),
     prisma.dailyBonusClaim.findMany({ where: { userId } }),
   ]);
 
@@ -153,6 +155,17 @@ export async function exportAccountBackup(
         kind: row.kind,
         createdAt: row.createdAt.toISOString(),
       })),
+      likeCredits: likeCredits.map((row) => ({
+        id: row.id,
+        likeId: row.likeId,
+        tier: row.tier,
+        earnedAt: row.earnedAt.toISOString(),
+        expiresAt: row.expiresAt.toISOString(),
+        usedAt: iso(row.usedAt),
+        voidedAt: iso(row.voidedAt),
+        source: row.source,
+        sourceId: row.sourceId,
+      })),
       dailyBonusClaims: dailyBonusClaims.map((row) => ({
         id: row.id,
         dayKey: row.dayKey,
@@ -195,6 +208,7 @@ function validateLikeReferences(
 }
 
 async function deleteAllUserData(tx: Prisma.TransactionClient, userId: string) {
+  await tx.likeCredit.deleteMany({ where: { userId } });
   await tx.likeCreditLedger.deleteMany({ where: { userId } });
   await tx.likeGrantLog.deleteMany({ where: { userId } });
   await tx.likeUsedCount.deleteMany({ where: { userId } });
@@ -231,6 +245,7 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
   validateLikeReferences(likeIds, data.likeUsedCounts, "Like used count");
   validateLikeReferences(likeIds, data.likeGrantLogs, "Like grant log");
   validateLikeReferences(likeIds, data.likeCreditLedger, "Like credit ledger");
+  validateLikeReferences(likeIds, data.likeCredits, "Like credit");
   for (const goal of data.goals) {
     if (!visionIds.has(goal.visionId)) {
       throw new Error(`Goal "${goal.name}" references unknown vision ${goal.visionId}`);
@@ -436,6 +451,23 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           delta: row.delta,
           kind: row.kind,
           createdAt: parseRequiredDate(row.createdAt, "likeCreditLedger.createdAt"),
+        })),
+      });
+    }
+
+    if (data.likeCredits.length > 0) {
+      await tx.likeCredit.createMany({
+        data: data.likeCredits.map((row) => ({
+          id: row.id,
+          userId,
+          likeId: row.likeId,
+          tier: row.tier as import("@prisma/client").RewardTier,
+          earnedAt: parseRequiredDate(row.earnedAt, "likeCredit.earnedAt"),
+          expiresAt: parseRequiredDate(row.expiresAt, "likeCredit.expiresAt"),
+          usedAt: parseOptionalDate(row.usedAt, "likeCredit.usedAt"),
+          voidedAt: parseOptionalDate(row.voidedAt, "likeCredit.voidedAt"),
+          source: row.source,
+          sourceId: row.sourceId,
         })),
       });
     }

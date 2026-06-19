@@ -71,6 +71,7 @@ model User {
   tierLikeResets   TierLikeReset[]
   likeGrantLogs    LikeGrantLog[]
   likeCreditLedger LikeCreditLedger[]
+  likeCredits      LikeCredit[]
 }
 
 model Habit {
@@ -112,8 +113,27 @@ model UserReward {
   likeUsedCounts   LikeUsedCount[]
   likeGrantLogs    LikeGrantLog[]
   likeCreditLedger LikeCreditLedger[]
+  likeCredits      LikeCredit[]
 
   @@index([userId, tier])
+}
+
+model LikeCredit {
+  id        String     @id @default(cuid())
+  userId    String
+  likeId    String
+  tier      RewardTier
+  earnedAt  DateTime   @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+  voidedAt  DateTime?
+  source    String
+  sourceId  String?
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  like      UserReward @relation(fields: [likeId], references: [id], onDelete: Cascade)
+
+  @@index([userId, likeId, expiresAt])
+  @@index([userId, likeId, earnedAt])
 }
 
 model LikeUsedCount {

@@ -30,9 +30,9 @@ export function dayKeyForTimezone(timeZone: string, date = new Date()): string {
   }).format(date);
 }
 
-type LocalParts = { y: number; m: number; d: number; h: number; min: number; s: number };
+export type LocalParts = { y: number; m: number; d: number; h: number; min: number; s: number };
 
-function getLocalParts(utc: Date, timeZone: string): LocalParts {
+export function getLocalParts(utc: Date, timeZone: string): LocalParts {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: safeTimeZone(timeZone),
     year: "numeric",
@@ -130,6 +130,41 @@ export function startOfLocalMonthUtc(timeZone: string, date = new Date()): Date 
 export function startOfLocalYearUtc(timeZone: string, date = new Date()): Date {
   const parts = getLocalParts(date, safeTimeZone(timeZone));
   return zonedWallTimeToUtc(parts.y, 1, 1, 0, 0, 0, timeZone);
+}
+
+function lastDayOfMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** Add calendar months in a timezone, preserving local wall time (clamps day on overflow). */
+export function addCalendarMonthsInTimezone(
+  date: Date,
+  months: number,
+  timeZone: string
+): Date {
+  const tz = safeTimeZone(timeZone);
+  const parts = getLocalParts(date, tz);
+  let m = parts.m + months;
+  let y = parts.y;
+  while (m > 12) {
+    m -= 12;
+    y += 1;
+  }
+  while (m < 1) {
+    m += 12;
+    y -= 1;
+  }
+  const d = Math.min(parts.d, lastDayOfMonth(y, m));
+  return zonedWallTimeToUtc(y, m, d, parts.h, parts.min, parts.s, tz);
+}
+
+/** Add calendar years in a timezone, preserving local wall time (clamps Feb 29). */
+export function addCalendarYearsInTimezone(date: Date, years: number, timeZone: string): Date {
+  const tz = safeTimeZone(timeZone);
+  const parts = getLocalParts(date, tz);
+  const y = parts.y + years;
+  const d = Math.min(parts.d, lastDayOfMonth(y, parts.m));
+  return zonedWallTimeToUtc(y, parts.m, d, parts.h, parts.min, parts.s, tz);
 }
 
 export function isSameDayInTimezone(

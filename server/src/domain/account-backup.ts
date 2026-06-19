@@ -3,7 +3,7 @@
  * `aiRecoveryGuide` and other metadata are ignored on upload.
  */
 export const BACKUP_FORMAT = "effortless-backup";
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 
 export const AI_RECOVERY_GUIDE = `Effortless account backup — AI recovery guide
 
@@ -30,6 +30,7 @@ GLOSSARY (UI name → data key → DB model)
 - Tier like resets → data.tierLikeResets → TierLikeReset
 - Like grants from tasks/dailies → data.likeGrantLogs → LikeGrantLog
 - Like split/combine ledger → data.likeCreditLedger → LikeCreditLedger
+- Like credits (usable instances) → data.likeCredits → LikeCredit
 - Daily bonus claims → data.dailyBonusClaims → DailyBonusClaim
 
 TASK REWARDS
@@ -46,7 +47,7 @@ IMPORT ORDER (if rebuilding manually)
 3. goals (parents before children via parentGoalId)
 4. tasks (Habit) — after likes for rewardLikeId FK
 5. dailySettings, wheelConfigs
-6. tokens, spinLogs, likeUsedCounts, tierLikeResets, likeGrantLogs, likeCreditLedger, dailyBonusClaims
+6. tokens, spinLogs, likeUsedCounts, tierLikeResets, likeGrantLogs, likeCreditLedger, likeCredits, dailyBonusClaims
 
 DATES: all *At fields are ISO-8601 UTC strings.
 ENUMS: stored as strings matching Prisma enum names (e.g. TaskSection: Must, Should, Could).
@@ -76,6 +77,7 @@ export interface AccountBackupData {
   tierLikeResets: ExportedTierLikeReset[];
   likeGrantLogs: ExportedLikeGrantLog[];
   likeCreditLedger: ExportedLikeCreditLedger[];
+  likeCredits: ExportedLikeCredit[];
   dailyBonusClaims: ExportedDailyBonusClaim[];
 }
 
@@ -191,6 +193,18 @@ export interface ExportedLikeCreditLedger {
   createdAt: string;
 }
 
+export interface ExportedLikeCredit {
+  id: string;
+  likeId: string;
+  tier: string;
+  earnedAt: string;
+  expiresAt: string;
+  usedAt: string | null;
+  voidedAt: string | null;
+  source: string;
+  sourceId: string | null;
+}
+
 export interface ExportedDailyBonusClaim {
   id: string;
   dayKey: string;
@@ -212,7 +226,7 @@ export function parseBackupFile(value: unknown): AccountBackupFile {
   if (raw.format !== BACKUP_FORMAT) {
     throw new Error('Invalid backup format (expected "effortless-backup")');
   }
-  if (raw.version !== BACKUP_VERSION) {
+  if (raw.version !== 1 && raw.version !== 2) {
     throw new Error(`Unsupported backup version: ${String(raw.version)}`);
   }
   if (!raw.data || typeof raw.data !== "object" || Array.isArray(raw.data)) {
@@ -248,6 +262,7 @@ export function parseBackupFile(value: unknown): AccountBackupFile {
       tierLikeResets: requireArray("tierLikeResets") as ExportedTierLikeReset[],
       likeGrantLogs: requireArray("likeGrantLogs") as ExportedLikeGrantLog[],
       likeCreditLedger: requireArray("likeCreditLedger") as ExportedLikeCreditLedger[],
+      likeCredits: (Array.isArray(data.likeCredits) ? data.likeCredits : []) as ExportedLikeCredit[],
       dailyBonusClaims: requireArray("dailyBonusClaims") as ExportedDailyBonusClaim[],
     },
   };

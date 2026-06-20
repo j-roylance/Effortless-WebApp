@@ -8,6 +8,7 @@ import {
 export interface ScheduleOverride {
   scheduledAt?: string;
   dueAt?: string | null;
+  achieved?: boolean;
 }
 
 export type ScheduleOverrides = Record<string, ScheduleOverride>;
@@ -51,7 +52,15 @@ export function parseScheduleOverrides(value: unknown): ScheduleOverrides | null
       if (!Number.isNaN(d.getTime())) override.dueAt = d.toISOString();
     }
 
-    if (override.scheduledAt !== undefined || override.dueAt !== undefined) {
+    if (row.achieved === true) {
+      override.achieved = true;
+    }
+
+    if (
+      override.scheduledAt !== undefined ||
+      override.dueAt !== undefined ||
+      override.achieved
+    ) {
       result[dayKey] = override;
     }
   }
@@ -159,11 +168,26 @@ export function mergeOccurrenceOverride(
   const existing = current[dayKey] ?? {};
   const merged: ScheduleOverride = { ...existing, ...patch };
 
-  if (overrideMatchesDefault(task, dayKey, merged)) {
+  if (overrideMatchesDefault(task, dayKey, merged) && !merged.achieved) {
     delete current[dayKey];
   } else {
     current[dayKey] = merged;
   }
 
   return Object.keys(current).length > 0 ? current : null;
+}
+
+export function isOccurrenceAchieved(
+  task: OccurrenceTaskFields,
+  dayKey: string
+): boolean {
+  const overrides = parseScheduleOverrides(task.scheduleOverrides);
+  return overrides?.[dayKey]?.achieved === true;
+}
+
+export function markOccurrenceAchieved(
+  task: OccurrenceTaskFields,
+  dayKey: string
+): ScheduleOverrides | null {
+  return mergeOccurrenceOverride(task, dayKey, { achieved: true });
 }

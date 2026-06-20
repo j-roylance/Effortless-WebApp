@@ -4,6 +4,7 @@ import { toLocalDateInput, type RecurrenceConfig, type TaskRecurrence } from "./
 export interface ScheduleOverride {
   scheduledAt?: string;
   dueAt?: string | null;
+  achieved?: boolean;
 }
 
 export type ScheduleOverrides = Record<string, ScheduleOverride>;
@@ -30,7 +31,15 @@ export function parseScheduleOverrides(value: unknown): ScheduleOverrides | null
       if (!Number.isNaN(d.getTime())) override.dueAt = d.toISOString();
     }
 
-    if (override.scheduledAt !== undefined || override.dueAt !== undefined) {
+    if (row.achieved === true) {
+      override.achieved = true;
+    }
+
+    if (
+      override.scheduledAt !== undefined ||
+      override.dueAt !== undefined ||
+      override.achieved
+    ) {
       result[dayKey] = override;
     }
   }
@@ -97,4 +106,10 @@ export function taskOccursOnDay(task: Task, dayKey: string): boolean {
   if (!occursOnDay(task.recurrence, task.recurrenceConfig, dayKey)) return false;
   const anchorKey = toLocalDateInput(task.createdAt);
   return !!anchorKey && dayKey >= anchorKey;
+}
+
+/** True when a recurring occurrence was achieved on the given calendar day. */
+export function isOccurrenceAchieved(task: Task, dayKey: string): boolean {
+  if (task.scheduleOverrides?.[dayKey]?.achieved) return true;
+  return task.achievedAt != null && toLocalDateInput(task.achievedAt) === dayKey;
 }

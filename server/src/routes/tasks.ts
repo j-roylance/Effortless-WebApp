@@ -12,6 +12,7 @@ import {
   type RecurrenceConfig,
 } from "../domain/recurrence.js";
 import {
+  markOccurrenceAchieved,
   mergeOccurrenceOverride,
   parseScheduleOverrides,
   taskOccursOnDay,
@@ -603,12 +604,20 @@ tasksRouter.post("/:id/achieve", async (req: AuthedRequest, res) => {
       }
     }
 
+    const scheduleOverrides =
+      task.recurrence !== TaskRecurrence.None
+        ? markOccurrenceAchieved(task, todayKey)
+        : undefined;
+
     const updated = await tx.habit.update({
       where: { id: task.id },
       data: {
         achievedAt: now,
         scheduledAt: advanced.scheduledAt,
         dueAt: advanced.dueAt,
+        ...(scheduleOverrides !== undefined && {
+          scheduleOverrides: toJsonOverrides(scheduleOverrides),
+        }),
         ...(!task.persistAfterDone && { archivedAt: now }),
       },
       include: { rewardLike: { select: { label: true } } },

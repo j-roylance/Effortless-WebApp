@@ -19,6 +19,7 @@ import {
   entriesForDay,
   formatHourLabel,
   isPlanningDone,
+  layoutCalendarEntries,
   minutesFromPointerY,
   dateTimeFromMinutes,
   setPlanningDone,
@@ -90,6 +91,18 @@ export function CalendarPage() {
     () => new Set(entries.filter((e) => e.type === "do").map((e) => e.taskId)),
     [entries]
   );
+
+  const layoutByKey = useMemo(() => {
+    const items = entries.map((entry) => ({
+      key: entry.key,
+      startMinutes:
+        dragging?.key === entry.key && dragMinutes !== null
+          ? dragMinutes
+          : entry.startMinutes,
+      durationMinutes: entry.durationMinutes,
+    }));
+    return layoutCalendarEntries(items);
+  }, [entries, dragging, dragMinutes]);
 
   const isToday = selectedDate === todayDateInput();
   const showPlanningButton = useMemo(
@@ -351,6 +364,10 @@ export function CalendarPage() {
               const top = (topMinutes / 60) * CALENDAR_HOUR_HEIGHT;
               const height = (entry.durationMinutes / 60) * CALENDAR_HOUR_HEIGHT;
               const sectionColor = TASK_SECTION_COLOR[normalizeSection(entry.task.section)];
+              const { column, columnCount } = layoutByKey.get(entry.key) ?? {
+                column: 0,
+                columnCount: 1,
+              };
 
               return (
                 <div
@@ -361,6 +378,8 @@ export function CalendarPage() {
                   style={{
                     top,
                     height: Math.max(height, 28),
+                    ["--col-index" as string]: column,
+                    ["--col-count" as string]: columnCount,
                     ...(entry.type === "do"
                       ? { backgroundColor: sectionColor, borderColor: sectionColor }
                       : { borderColor: sectionColor, color: sectionColor }),

@@ -1953,9 +1953,20 @@ h3,
 }
 
 .calendar-event {
+  --col-count: 1;
+  --col-index: 0;
+  --calendar-event-pad: 0.35rem;
+  --calendar-event-gap: 0.15rem;
   position: absolute;
-  left: 0.35rem;
-  right: 0.35rem;
+  left: calc(
+    var(--calendar-event-pad) + var(--col-index) *
+      ((100% - 2 * var(--calendar-event-pad) - (var(--col-count) - 1) * var(--calendar-event-gap)) /
+        var(--col-count) + var(--calendar-event-gap))
+  );
+  width: calc(
+    (100% - 2 * var(--calendar-event-pad) - (var(--col-count) - 1) * var(--calendar-event-gap)) /
+      var(--col-count)
+  );
   border-radius: 4px;
   padding: 0.35rem 0.45rem;
   pointer-events: auto;
@@ -1966,6 +1977,7 @@ h3,
   gap: 0.35rem;
   overflow: hidden;
   z-index: 1;
+  box-sizing: border-box;
 }
 
 .calendar-event--do {

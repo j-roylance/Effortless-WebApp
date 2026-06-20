@@ -136,6 +136,114 @@ export function entriesForDay(tasks: Task[], dateInput: string): CalendarEntry[]
   return entries.sort((a, b) => a.startMinutes - b.startMinutes);
 }
 
+export interface CalendarEntryLayout {
+  column: number;
+  columnCount: number;
+}
+
+interface LayoutInterval {
+  key: string;
+  startMinutes: number;
+  endMinutes: number;
+  durationMinutes: number;
+}
+
+function entriesOverlap(a: LayoutInterval, b: LayoutInterval): boolean {
+  return a.startMinutes < b.endMinutes && b.startMinutes < a.endMinutes;
+}
+
+function clusterLayoutItems(items: LayoutInterval[]): LayoutInterval[][] {
+  const parent = items.map((_, index) => index);
+
+  function find(index: number): number {
+    let root = index;
+    while (parent[root] !== root) {
+      parent[root] = parent[parent[root]!]!;
+      root = parent[root]!;
+    }
+    return root;
+  }
+
+  function union(a: number, b: number) {
+    const rootA = find(a);
+    const rootB = find(b);
+    if (rootA !== rootB) parent[rootB] = rootA;
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    for (let j = i + 1; j < items.length; j++) {
+      if (entriesOverlap(items[i]!, items[j]!)) {
+        union(i, j);
+      }
+    }
+  }
+
+  const clusters = new Map<number, LayoutInterval[]>();
+  for (let i = 0; i < items.length; i++) {
+    const root = find(i);
+    const cluster = clusters.get(root) ?? [];
+    cluster.push(items[i]!);
+    clusters.set(root, cluster);
+  }
+
+  return [...clusters.values()];
+}
+
+function assignColumns(cluster: LayoutInterval[]): Map<string, CalendarEntryLayout> {
+  const sorted = [...cluster].sort((a, b) => {
+    if (a.startMinutes !== b.startMinutes) return a.startMinutes - b.startMinutes;
+    return b.durationMinutes - a.durationMinutes;
+  });
+
+  const columns: LayoutInterval[][] = [];
+  const layouts = new Map<string, CalendarEntryLayout>();
+
+  for (const item of sorted) {
+    let placed = false;
+    for (let col = 0; col < columns.length; col++) {
+      if (!columns[col]!.some((existing) => entriesOverlap(existing, item))) {
+        columns[col]!.push(item);
+        layouts.set(item.key, { column: col, columnCount: 0 });
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      columns.push([item]);
+      layouts.set(item.key, { column: columns.length - 1, columnCount: 0 });
+    }
+  }
+
+  const columnCount = columns.length;
+  for (const [key, layout] of layouts) {
+    layouts.set(key, { column: layout.column, columnCount });
+  }
+
+  return layouts;
+}
+
+/** Side-by-side column layout for overlapping calendar entries on the same day. */
+export function layoutCalendarEntries(
+  items: Array<{ key: string; startMinutes: number; durationMinutes: number }>
+): Map<string, CalendarEntryLayout> {
+  if (items.length === 0) return new Map();
+
+  const intervals: LayoutInterval[] = items.map((item) => ({
+    key: item.key,
+    startMinutes: item.startMinutes,
+    endMinutes: item.startMinutes + item.durationMinutes,
+    durationMinutes: item.durationMinutes,
+  }));
+
+  const result = new Map<string, CalendarEntryLayout>();
+  for (const cluster of clusterLayoutItems(intervals)) {
+    for (const [key, layout] of assignColumns(cluster)) {
+      result.set(key, layout);
+    }
+  }
+  return result;
+}
+
 export function planningDoneStorageKey(userId: string, dateInput: string): string {
   return `effortless:planningDone:${userId}:${dateInput}`;
 }

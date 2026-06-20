@@ -303,6 +303,16 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
   res.json({ tasks: rows.map((row) => serializeTask(row, likeLabelsById)) });
 });
 
+tasksRouter.get("/archived", async (req: AuthedRequest, res) => {
+  const rows = await prisma.habit.findMany({
+    where: { userId: req.user!.userId, archivedAt: { not: null } },
+    include: { rewardLike: { select: { label: true } } },
+    orderBy: [{ archivedAt: "desc" }, { createdAt: "desc" }],
+  });
+  const likeLabelsById = await buildLikeLabelsMap(req.user!.userId, rows);
+  res.json({ tasks: rows.map((row) => serializeTask(row, likeLabelsById)) });
+});
+
 /** New task grants +1 Bronze token (source: task_create). */
 tasksRouter.post("/", async (req: AuthedRequest, res) => {
   try {
@@ -512,6 +522,35 @@ tasksRouter.delete("/:id", async (req: AuthedRequest, res) => {
   }
   await prisma.habit.delete({ where: { id: existing.id } });
   res.json({ ok: true });
+});
+
+/** Restore an archived task back to the active list. */
+tasksRouter.post("/:id/restore", async (req: AuthedRequest, res) => {
+  const taskId = String(req.params.id);
+  const existing = await prisma.habit.findFirst({
+    where: {
+      id: taskId,
+      userId: req.user!.userId,
+      archivedAt: { not: null },
+    },
+  });
+  if (!existing) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const section = normalizeSection(existing.section);
+  const task = await prisma.habit.update({
+    where: { id: existing.id },
+    data: {
+      archivedAt: null,
+      sortOrder: await nextSortOrder(req.user!.userId, section),
+    },
+    include: { rewardLike: { select: { label: true } } },
+  });
+
+  const likeLabelsById = await buildLikeLabelsMap(req.user!.userId, [task]);
+  res.json({ task: serializeTask(task, likeLabelsById) });
 });
 
 /** Complete task; grant token at task tier; archive if one-time. */

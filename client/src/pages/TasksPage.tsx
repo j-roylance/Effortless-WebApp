@@ -13,13 +13,14 @@ import { useTokenRewardFromNavigation } from "../hooks/useTokenRewardFromNavigat
 import { useRewardQueue } from "../hooks/useRewardQueue";
 import { rewardsFromAchieve } from "../domain/achieve-rewards";
 import { todayDateInput } from "../domain/calendar";
-import { isTaskPastDue } from "../domain/recurrence";
+import { formatDateTime, isTaskPastDue } from "../domain/recurrence";
 import {
   TASK_SECTIONS,
   TASK_SECTION_LABEL,
   TASK_TIME_BUCKETS,
   TASK_TIME_BUCKET_LABEL,
   groupTasksByTimeAndSection,
+  normalizeSection,
   timeBucketHasTasks,
   type TaskSection,
   type TaskTimeBucket,
@@ -105,10 +106,89 @@ function TaskTimeBlock({
   );
 }
 
+function ArchivedTasksSection({
+  show,
+  onToggle,
+  tasks,
+  isLoading,
+  isError,
+  onRetry,
+  onRestore,
+  restoringId,
+}: {
+  show: boolean;
+  onToggle: () => void;
+  tasks: Task[];
+  isLoading: boolean;
+  isError: boolean;
+  onRetry: () => void;
+  onRestore: (id: string) => void;
+  restoringId: string | null;
+}) {
+  return (
+    <section className="task-archived-block">
+      <button type="button" className="task-archived-toggle" onClick={onToggle}>
+        {show ? "Hide archived tasks" : "Show archived tasks"}
+      </button>
+
+      {show && (
+        <div className="task-archived-panel">
+          <h2 className="task-archived-title">
+            Archived{tasks.length > 0 ? ` (${tasks.length})` : ""}
+          </h2>
+          {isLoading && <p className="task-section-empty">Loading archived tasks…</p>}
+          {isError && (
+            <p className="task-section-empty">
+              Could not load archived tasks.{" "}
+              <button type="button" className="link-btn" onClick={onRetry}>
+                Retry
+              </button>
+            </p>
+          )}
+          {!isLoading && !isError && tasks.length === 0 && (
+            <p className="task-section-empty">No archived tasks</p>
+          )}
+          {!isLoading && !isError && tasks.length > 0 && (
+            <div className="task-list">
+              {tasks.map((task) => (
+                <article key={task.id} className="task-card task-card--archived neon-card">
+                  <div className="task-card-header">
+                    <div>
+                      <h4 style={{ margin: "0 0 0.35rem", fontSize: "1.1rem" }}>{task.name}</h4>
+                      <p className="task-archived-meta">
+                        {TASK_SECTION_LABEL[normalizeSection(task.section)]}
+                        {task.archivedAt
+                          ? ` · Removed ${formatDateTime(task.archivedAt)}`
+                          : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="task-card-actions">
+                    <button
+                      type="button"
+                      className="neon-btn neon-btn-primary"
+                      style={{ flex: 1 }}
+                      onClick={() => onRestore(task.id)}
+                      disabled={restoringId === task.id}
+                    >
+                      {restoringId === task.id ? "Restoring…" : "Restore"}
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function TasksPage() {
   const queryClient = useQueryClient();
   const location = useLocation();
   const [showTokens, setShowTokens] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const { current: reward, enqueue: enqueueReward, dismissCurrent: dismissReward } =
     useRewardQueue();
@@ -122,6 +202,17 @@ export function TasksPage() {
   const { data: tasksData, isLoading, isError, refetch } = useQuery({
     queryKey: ["tasks"],
     queryFn: () => api<{ tasks: Task[] }>("/tasks"),
+  });
+
+  const {
+    data: archivedData,
+    isLoading: archivedLoading,
+    isError: archivedError,
+    refetch: refetchArchived,
+  } = useQuery({
+    queryKey: ["tasks", "archived"],
+    queryFn: () => api<{ tasks: Task[] }>("/tasks/archived"),
+    enabled: showArchived,
   });
 
   const { data: tokenData } = useQuery({
@@ -139,6 +230,7 @@ export function TasksPage() {
       api<AchieveResult>(`/tasks/${id}/achieve`, { method: "POST" }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", "archived"] });
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
       queryClient.invalidateQueries({ queryKey: ["likes"] });
       enqueueReward(rewardsFromAchieve(data));
@@ -146,7 +238,18 @@ export function TasksPage() {
     onError: (err: Error) => setToast(err.message),
   });
 
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) =>
+      api<{ task: Task }>(`/tasks/${id}/restore`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", "archived"] });
+    },
+    onError: (err: Error) => setToast(err.message),
+  });
+
   const tasks = tasksData?.tasks ?? [];
+  const archivedTasks = archivedData?.tasks ?? [];
   const tasksByTimeAndSection = useMemo(
     () => groupTasksByTimeAndSection(tasks, todayDateInput()),
     [tasks]
@@ -228,6 +331,19 @@ export function TasksPage() {
             baseSpinWeights={baseSpinWeights}
           />
         ))}
+
+      {!isLoading && !isError && (
+        <ArchivedTasksSection
+          show={showArchived}
+          onToggle={() => setShowArchived((v) => !v)}
+          tasks={archivedTasks}
+          isLoading={showArchived && archivedLoading}
+          isError={showArchived && archivedError}
+          onRetry={() => refetchArchived()}
+          onRestore={(id) => restoreMutation.mutate(id)}
+          restoringId={restoreMutation.isPending ? restoreMutation.variables ?? null : null}
+        />
+      )}
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 

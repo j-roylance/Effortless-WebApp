@@ -11,13 +11,18 @@ import { Toast } from "../components/Toast";
 import { RewardModalHost } from "../components/RewardModalHost";
 import { useTokenRewardFromNavigation } from "../hooks/useTokenRewardFromNavigation";
 import { useRewardQueue } from "../hooks/useRewardQueue";
-import { rewardsFromAchieve, rewardsFromPlanningClaim } from "../domain/achieve-rewards";
+import { rewardsFromAchieve } from "../domain/achieve-rewards";
+import { todayDateInput } from "../domain/calendar";
 import { isTaskPastDue } from "../domain/recurrence";
 import {
   TASK_SECTIONS,
   TASK_SECTION_LABEL,
-  groupTasksBySection,
+  TASK_TIME_BUCKETS,
+  TASK_TIME_BUCKET_LABEL,
+  groupTasksByTimeAndSection,
+  timeBucketHasTasks,
   type TaskSection,
+  type TaskTimeBucket,
 } from "../domain/tasks";
 import { TIERS } from "../domain/tiers";
 import { SpinPityHintForTier } from "../components/SpinPityHint";
@@ -26,7 +31,6 @@ import { DEFAULT_DAILY_SETTINGS, type DailySettings } from "../domain/daily";
 function TaskSectionBlock({
   section,
   tasks,
-  pastDue,
   onAchieve,
   achieving,
   pityByTier,
@@ -34,7 +38,6 @@ function TaskSectionBlock({
 }: {
   section: TaskSection;
   tasks: Task[];
-  pastDue?: boolean;
   onAchieve: (id: string) => void;
   achieving: boolean;
   pityByTier?: Record<RewardTier, SpinPityStatus>;
@@ -43,11 +46,7 @@ function TaskSectionBlock({
   const sectionClass = section.toLowerCase();
 
   return (
-    <section
-      className={`task-section task-section--${sectionClass}${
-        pastDue ? " task-section--past-due-nested" : ""
-      }`}
-    >
+    <section className={`task-section task-section--${sectionClass}`}>
       <h3 className="task-section-title">{TASK_SECTION_LABEL[section]}</h3>
 
       {tasks.length === 0 ? (
@@ -58,7 +57,7 @@ function TaskSectionBlock({
             <TaskCard
               key={task.id}
               task={task}
-              pastDue={pastDue}
+              pastDue={isTaskPastDue(task.dueAt)}
               onAchieve={onAchieve}
               achieving={achieving}
               pityByTier={pityByTier}
@@ -67,6 +66,41 @@ function TaskSectionBlock({
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+function TaskTimeBlock({
+  bucket,
+  bySection,
+  onAchieve,
+  achieving,
+  pityByTier,
+  baseSpinWeights,
+}: {
+  bucket: TaskTimeBucket;
+  bySection: Record<TaskSection, Task[]>;
+  onAchieve: (id: string) => void;
+  achieving: boolean;
+  pityByTier?: Record<RewardTier, SpinPityStatus>;
+  baseSpinWeights?: SpinOutcomeWeights;
+}) {
+  if (!timeBucketHasTasks(bySection)) return null;
+
+  return (
+    <section className={`task-time-block task-time-block--${bucket}`}>
+      <h2 className="task-time-title">{TASK_TIME_BUCKET_LABEL[bucket]}</h2>
+      {TASK_SECTIONS.map((section) => (
+        <TaskSectionBlock
+          key={`${bucket}-${section}`}
+          section={section}
+          tasks={bySection[section]}
+          onAchieve={onAchieve}
+          achieving={achieving}
+          pityByTier={pityByTier}
+          baseSpinWeights={baseSpinWeights}
+        />
+      ))}
     </section>
   );
 }
@@ -113,9 +147,10 @@ export function TasksPage() {
   });
 
   const tasks = tasksData?.tasks ?? [];
-  const activeBySection = useMemo(() => groupTasksBySection(tasks, false), [tasks]);
-  const pastDueBySection = useMemo(() => groupTasksBySection(tasks, true), [tasks]);
-  const hasPastDue = useMemo(() => tasks.some((t) => isTaskPastDue(t.dueAt)), [tasks]);
+  const tasksByTimeAndSection = useMemo(
+    () => groupTasksByTimeAndSection(tasks, todayDateInput()),
+    [tasks]
+  );
 
   const balances = tokenData?.balances;
   const pityByTier = tokenData?.pityByTier;
@@ -180,36 +215,19 @@ export function TasksPage() {
         </div>
       )}
 
-      {!isLoading && !isError &&
-        TASK_SECTIONS.map((section) => (
-          <TaskSectionBlock
-            key={section}
-            section={section}
-            tasks={activeBySection[section]}
+      {!isLoading &&
+        !isError &&
+        TASK_TIME_BUCKETS.map((bucket) => (
+          <TaskTimeBlock
+            key={bucket}
+            bucket={bucket}
+            bySection={tasksByTimeAndSection[bucket]}
             onAchieve={handleAchieve}
             achieving={achieveMutation.isPending}
             pityByTier={pityByTier}
             baseSpinWeights={baseSpinWeights}
           />
         ))}
-
-      {!isLoading && !isError && hasPastDue && (
-        <section className="past-due-block">
-          <h2 className="past-due-title">Past Due</h2>
-          {TASK_SECTIONS.map((section) => (
-            <TaskSectionBlock
-              key={`past-${section}`}
-              section={section}
-              tasks={pastDueBySection[section]}
-              pastDue
-              onAchieve={handleAchieve}
-              achieving={achieveMutation.isPending}
-              pityByTier={pityByTier}
-              baseSpinWeights={baseSpinWeights}
-            />
-          ))}
-        </section>
-      )}
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 

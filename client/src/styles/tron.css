@@ -530,6 +530,37 @@ h3,
   text-shadow: 0 0 10px rgba(255, 68, 102, 0.35);
 }
 
+.task-time-block {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+.task-time-block:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.task-time-title {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  font-family: var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.15);
+}
+
+.task-time-block--past {
+  border-top-color: rgba(255, 68, 102, 0.35);
+}
+
+.task-time-block--past .task-time-title {
+  color: var(--danger);
+  text-shadow: 0 0 10px rgba(255, 68, 102, 0.35);
+}
+
 .task-section--past-due-nested {
   margin-bottom: 1rem;
 }

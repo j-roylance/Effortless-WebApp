@@ -139,6 +139,23 @@ export function entriesForDay(tasks: Task[], dateInput: string): CalendarEntry[]
   return entries.sort((a, b) => a.startMinutes - b.startMinutes);
 }
 
+/** True when the task would appear on the calendar for the given day. */
+export function taskShowsOnCalendarDay(task: Task, dateInput: string): boolean {
+  if (task.recurrence !== "None" && taskOccursOnDay(task, dateInput)) {
+    if (isOccurrenceAchieved(task, dateInput)) return false;
+    if (isOccurrenceSkipped(task, dateInput)) return false;
+
+    const occurrence = resolveOccurrenceForDay(task, dateInput);
+    if (!occurrence) return false;
+
+    return isSameLocalDay(occurrence.scheduledAt, dateInput);
+  }
+
+  if (isSameLocalDay(task.scheduledAt, dateInput)) return true;
+  if (isSameLocalDay(task.dueAt, dateInput)) return true;
+  return false;
+}
+
 export interface CalendarEntryLayout {
   column: number;
   columnCount: number;

@@ -1,6 +1,6 @@
 import type { Task } from "../api/types";
 import { toLocalDateInput } from "./recurrence";
-import { resolveOccurrenceForDay, taskOccursOnDay, isOccurrenceAchieved } from "./schedule-overrides";
+import { resolveOccurrenceForDay, taskOccursOnDay, isOccurrenceAchieved, isOccurrenceSkipped } from "./schedule-overrides";
 
 export const CALENDAR_HOUR_HEIGHT = 48;
 export const CALENDAR_DAY_MINUTES = 24 * 60;
@@ -92,6 +92,7 @@ export function entriesForDay(tasks: Task[], dateInput: string): CalendarEntry[]
   for (const task of tasks) {
     if (task.recurrence !== "None" && taskOccursOnDay(task, dateInput)) {
       if (isOccurrenceAchieved(task, dateInput)) continue;
+      if (isOccurrenceSkipped(task, dateInput)) continue;
 
       const occurrence = resolveOccurrenceForDay(task, dateInput);
       if (!occurrence) continue;

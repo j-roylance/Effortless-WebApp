@@ -5,6 +5,7 @@ export interface ScheduleOverride {
   scheduledAt?: string;
   dueAt?: string | null;
   achieved?: boolean;
+  skipped?: boolean;
 }
 
 export type ScheduleOverrides = Record<string, ScheduleOverride>;
@@ -34,11 +35,15 @@ export function parseScheduleOverrides(value: unknown): ScheduleOverrides | null
     if (row.achieved === true) {
       override.achieved = true;
     }
+    if (row.skipped === true) {
+      override.skipped = true;
+    }
 
     if (
       override.scheduledAt !== undefined ||
       override.dueAt !== undefined ||
-      override.achieved
+      override.achieved ||
+      override.skipped
     ) {
       result[dayKey] = override;
     }
@@ -112,4 +117,9 @@ export function taskOccursOnDay(task: Task, dayKey: string): boolean {
 export function isOccurrenceAchieved(task: Task, dayKey: string): boolean {
   if (task.scheduleOverrides?.[dayKey]?.achieved) return true;
   return task.achievedAt != null && toLocalDateInput(task.achievedAt) === dayKey;
+}
+
+/** True when a recurring occurrence was skipped (removed) on the given calendar day. */
+export function isOccurrenceSkipped(task: Task, dayKey: string): boolean {
+  return task.scheduleOverrides?.[dayKey]?.skipped === true;
 }

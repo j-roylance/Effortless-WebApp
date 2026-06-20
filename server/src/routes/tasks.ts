@@ -13,6 +13,7 @@ import {
 } from "../domain/recurrence.js";
 import {
   markOccurrenceAchieved,
+  markOccurrenceSkipped,
   mergeOccurrenceOverride,
   parseScheduleOverrides,
   taskOccursOnDay,
@@ -79,6 +80,7 @@ const taskBodySchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
+  skip: z.literal(true).optional(),
 });
 
 const taskPatchSchema = taskBodySchema.partial();
@@ -366,7 +368,9 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
     const occurrenceDayKey = body.occurrenceDayKey;
     const isOccurrencePatch =
       !!occurrenceDayKey &&
-      (body.scheduledAt !== undefined || body.dueAt !== undefined);
+      (body.scheduledAt !== undefined ||
+        body.dueAt !== undefined ||
+        body.skip === true);
 
     if (isOccurrencePatch) {
       if (existing.recurrence === TaskRecurrence.None) {
@@ -379,15 +383,19 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
         return;
       }
 
-      const patch: { scheduledAt?: string; dueAt?: string | null } = {};
-      if (body.scheduledAt !== undefined) {
-        patch.scheduledAt = body.scheduledAt ?? undefined;
-      }
-      if (body.dueAt !== undefined) {
-        patch.dueAt = body.dueAt;
-      }
-
-      const scheduleOverrides = mergeOccurrenceOverride(existing, occurrenceDayKey, patch);
+      const scheduleOverrides =
+        body.skip === true
+          ? markOccurrenceSkipped(existing, occurrenceDayKey)
+          : mergeOccurrenceOverride(
+              existing,
+              occurrenceDayKey,
+              {
+                ...(body.scheduledAt !== undefined && {
+                  scheduledAt: body.scheduledAt ?? undefined,
+                }),
+                ...(body.dueAt !== undefined && { dueAt: body.dueAt }),
+              }
+            );
       const task = await prisma.habit.update({
         where: { id: existing.id },
         data: { scheduleOverrides: toJsonOverrides(scheduleOverrides) },

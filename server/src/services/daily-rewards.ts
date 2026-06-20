@@ -11,7 +11,7 @@ import {
   type MilestoneReward,
   type RewardGrant,
 } from "../domain/rewards.js";
-import { taskOccursOnDay } from "../domain/schedule-overrides.js";
+import { isOccurrenceSkipped, taskOccursOnDay } from "../domain/schedule-overrides.js";
 import { logLikeGrant } from "./like-tracking.js";
 
 export interface BonusToken {
@@ -56,7 +56,9 @@ export async function getDailySettings(userId: string): Promise<DailySettingsRew
 function tasksScheduledOnDay(tasks: Habit[], dayKey: string, timeZone: string): Habit[] {
   return tasks.filter((t) => {
     if (t.recurrence !== TaskRecurrence.None) {
-      return taskOccursOnDay(t, dayKey, timeZone);
+      return (
+        taskOccursOnDay(t, dayKey, timeZone) && !isOccurrenceSkipped(t, dayKey)
+      );
     }
     return isSameDayInTimezone(t.scheduledAt, dayKey, timeZone);
   });

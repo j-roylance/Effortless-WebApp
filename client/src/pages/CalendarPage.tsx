@@ -184,6 +184,16 @@ export function CalendarPage() {
     onError: (err: Error) => setToast(err.message),
   });
 
+  const skipOccurrenceMutation = useMutation({
+    mutationFn: ({ taskId, dayKey }: { taskId: string; dayKey: string }) =>
+      api(`/tasks/${taskId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ occurrenceDayKey: dayKey, skip: true }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+    onError: (err: Error) => setToast(err.message),
+  });
+
   function handlePlanningDone() {
     if (!user?.id || planningMutation.isPending) return;
     planningMutation.mutate();
@@ -427,7 +437,19 @@ export function CalendarPage() {
                       type="button"
                       className="calendar-action-btn calendar-action-btn--danger"
                       onClick={() => {
-                        if (confirm("Delete this task?")) {
+                        if (entry.isRecurringInstance) {
+                          const dayKey = entry.occurrenceDayKey ?? selectedDate;
+                          if (
+                            confirm(
+                              "Remove this day only? The task will still repeat on other days."
+                            )
+                          ) {
+                            skipOccurrenceMutation.mutate({
+                              taskId: entry.taskId,
+                              dayKey,
+                            });
+                          }
+                        } else if (confirm("Delete this task?")) {
                           deleteMutation.mutate(entry.taskId);
                         }
                       }}

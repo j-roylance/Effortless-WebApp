@@ -2122,6 +2122,12 @@ h3,
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
+.calendar-event--skipped,
+.calendar-event--achieved,
+.calendar-event--archived {
+  cursor: default;
+}
+
 .calendar-event--skipped {
   opacity: 0.72;
   border-style: dashed !important;

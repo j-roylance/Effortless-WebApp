@@ -470,6 +470,7 @@ export function CalendarPage() {
                   }}
                   onPointerDown={(e) => {
                     if ((e.target as HTMLElement).closest("button, a")) return;
+                    if (entry.visibility !== "normal") return;
                     e.currentTarget.setPointerCapture(e.pointerId);
                     beginDrag(entry, e.clientY);
                   }}

@@ -211,3 +211,25 @@ export function markOccurrenceSkipped(
 ): ScheduleOverrides | null {
   return mergeOccurrenceOverride(task, dayKey, { skipped: true });
 }
+
+export function clearOccurrenceSkipped(
+  task: OccurrenceTaskFields,
+  dayKey: string
+): ScheduleOverrides | null {
+  const current = { ...(parseScheduleOverrides(task.scheduleOverrides) ?? {}) };
+  const existing = current[dayKey];
+  if (!existing?.skipped) {
+    return parseScheduleOverrides(task.scheduleOverrides);
+  }
+
+  const { skipped: _skipped, ...rest } = existing;
+  if (Object.keys(rest).length === 0) {
+    delete current[dayKey];
+  } else if (overrideMatchesDefault(task, dayKey, rest) && !rest.achieved) {
+    delete current[dayKey];
+  } else {
+    current[dayKey] = rest;
+  }
+
+  return Object.keys(current).length > 0 ? current : null;
+}

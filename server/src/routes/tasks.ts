@@ -12,6 +12,7 @@ import {
   type RecurrenceConfig,
 } from "../domain/recurrence.js";
 import {
+  clearOccurrenceSkipped,
   markOccurrenceAchieved,
   markOccurrenceSkipped,
   mergeOccurrenceOverride,
@@ -81,6 +82,7 @@ const taskBodySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
   skip: z.literal(true).optional(),
+  unskip: z.literal(true).optional(),
 });
 
 const taskPatchSchema = taskBodySchema.partial();
@@ -380,11 +382,16 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
       !!occurrenceDayKey &&
       (body.scheduledAt !== undefined ||
         body.dueAt !== undefined ||
-        body.skip === true);
+        body.skip === true ||
+        body.unskip === true);
 
     if (isOccurrencePatch) {
       if (existing.recurrence === TaskRecurrence.None) {
         res.status(400).json({ error: "Occurrence overrides require a repeating task" });
+        return;
+      }
+      if (body.skip === true && body.unskip === true) {
+        res.status(400).json({ error: "Cannot skip and unskip the same occurrence" });
         return;
       }
       const timeZone = safeTimeZone(req.headers["x-timezone"] as string);
@@ -396,16 +403,18 @@ tasksRouter.patch("/:id", async (req: AuthedRequest, res) => {
       const scheduleOverrides =
         body.skip === true
           ? markOccurrenceSkipped(existing, occurrenceDayKey)
-          : mergeOccurrenceOverride(
-              existing,
-              occurrenceDayKey,
-              {
-                ...(body.scheduledAt !== undefined && {
-                  scheduledAt: body.scheduledAt ?? undefined,
-                }),
-                ...(body.dueAt !== undefined && { dueAt: body.dueAt }),
-              }
-            );
+          : body.unskip === true
+            ? clearOccurrenceSkipped(existing, occurrenceDayKey)
+            : mergeOccurrenceOverride(
+                existing,
+                occurrenceDayKey,
+                {
+                  ...(body.scheduledAt !== undefined && {
+                    scheduledAt: body.scheduledAt ?? undefined,
+                  }),
+                  ...(body.dueAt !== undefined && { dueAt: body.dueAt }),
+                }
+              );
       const task = await prisma.habit.update({
         where: { id: existing.id },
         data: { scheduleOverrides: toJsonOverrides(scheduleOverrides) },

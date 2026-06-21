@@ -16,12 +16,14 @@ import { TaskFormPage } from "./TaskFormPage";
 import { TaskRewardGlyphs } from "../components/TaskRewardGlyphs";
 import {
   CALENDAR_HOUR_HEIGHT,
-  entriesForDay,
+  entriesForDayMerged,
   formatHourLabel,
+  isCalendarShowHidden,
   isPlanningDone,
   layoutCalendarEntries,
   minutesFromPointerY,
   dateTimeFromMinutes,
+  setCalendarShowHidden,
   setPlanningDone,
   todayDateInput,
   type CalendarEntry,
@@ -37,6 +39,15 @@ function shiftDate(dateInput: string, deltaDays: number): string {
   return toLocalDateInput(d.toISOString());
 }
 
+function entryTypeLabel(entry: CalendarEntry): string {
+  const base = entry.type === "do" ? "Do" : "Due";
+  if (entry.visibility === "achieved") return `${base} · Achieved`;
+  if (entry.visibility === "skipped") return `${base} · Skipped`;
+  if (entry.visibility === "archived") return `${base} · Archived`;
+  if (entry.isRecurringInstance) return `${base} · Repeat`;
+  return base;
+}
+
 export function CalendarPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -48,6 +59,7 @@ export function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState(todayDateInput());
   const [showNewTask, setShowNewTask] = useState(false);
   const [showTokens, setShowTokens] = useState(false);
+  const [showHidden, setShowHidden] = useState(isCalendarShowHidden);
   const [planningTick, setPlanningTick] = useState(0);
   const { current: reward, enqueue: enqueueReward, dismissCurrent: dismissReward } =
     useRewardQueue();
@@ -81,14 +93,26 @@ export function CalendarPage() {
     queryFn: () => api<DailySettings>("/daily-settings"),
   });
 
+  const { data: archivedData } = useQuery({
+    queryKey: ["tasks", "archived"],
+    queryFn: () => api<{ tasks: Task[] }>("/tasks/archived"),
+    enabled: showHidden,
+  });
+
   const tasks = tasksData?.tasks ?? [];
+  const archivedTasks = archivedData?.tasks ?? [];
   const entries = useMemo(
-    () => entriesForDay(tasks, selectedDate),
-    [tasks, selectedDate]
+    () => entriesForDayMerged(tasks, archivedTasks, selectedDate, showHidden),
+    [tasks, archivedTasks, selectedDate, showHidden]
   );
 
   const doTaskIds = useMemo(
-    () => new Set(entries.filter((e) => e.type === "do").map((e) => e.taskId)),
+    () =>
+      new Set(
+        entries
+          .filter((e) => e.type === "do" && e.visibility === "normal")
+          .map((e) => e.taskId)
+      ),
     [entries]
   );
 
@@ -155,6 +179,7 @@ export function CalendarPage() {
       api<AchieveResult>(`/tasks/${id}/achieve`, { method: "POST" }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", "archived"] });
       queryClient.invalidateQueries({ queryKey: ["tokens"] });
       queryClient.invalidateQueries({ queryKey: ["likes"] });
       enqueueReward(rewardsFromAchieve(data));
@@ -194,6 +219,26 @@ export function CalendarPage() {
     onError: (err: Error) => setToast(err.message),
   });
 
+  const unskipOccurrenceMutation = useMutation({
+    mutationFn: ({ taskId, dayKey }: { taskId: string; dayKey: string }) =>
+      api(`/tasks/${taskId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ occurrenceDayKey: dayKey, unskip: true }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+    onError: (err: Error) => setToast(err.message),
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) =>
+      api<{ task: Task }>(`/tasks/${id}/restore`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", "archived"] });
+    },
+    onError: (err: Error) => setToast(err.message),
+  });
+
   function handlePlanningDone() {
     if (!user?.id || planningMutation.isPending) return;
     planningMutation.mutate();
@@ -207,7 +252,14 @@ export function CalendarPage() {
     dragListenersRef.current = null;
   }
 
+  function toggleShowHidden() {
+    const next = !showHidden;
+    setShowHidden(next);
+    setCalendarShowHidden(next);
+  }
+
   function beginDrag(entry: CalendarEntry, clientY: number) {
+    if (entry.visibility !== "normal") return;
     clearDragListeners();
     setDragging(entry);
 
@@ -304,21 +356,32 @@ export function CalendarPage() {
       )}
 
       <div className="calendar-toolbar neon-card">
-        <div className="calendar-date-nav">
+        <div className="calendar-toolbar-top">
+          <div className="calendar-date-nav">
+            <button
+              type="button"
+              className="neon-btn neon-btn-sm"
+              onClick={() => setSelectedDate((d) => shiftDate(d, -1))}
+            >
+              ‹
+            </button>
+            <span className="calendar-date-label">{dateLabel}</span>
+            <button
+              type="button"
+              className="neon-btn neon-btn-sm"
+              onClick={() => setSelectedDate((d) => shiftDate(d, 1))}
+            >
+              ›
+            </button>
+          </div>
           <button
             type="button"
-            className="neon-btn neon-btn-sm"
-            onClick={() => setSelectedDate((d) => shiftDate(d, -1))}
+            className={`neon-btn neon-btn-sm calendar-hidden-toggle${
+              showHidden ? " calendar-hidden-toggle--active" : ""
+            }`}
+            onClick={toggleShowHidden}
           >
-            ‹
-          </button>
-          <span className="calendar-date-label">{dateLabel}</span>
-          <button
-            type="button"
-            className="neon-btn neon-btn-sm"
-            onClick={() => setSelectedDate((d) => shiftDate(d, 1))}
-          >
-            ›
+            {showHidden ? "Hide hidden" : "Show hidden"}
           </button>
         </div>
         {!isToday && (
@@ -346,6 +409,13 @@ export function CalendarPage() {
         <span className="calendar-legend-do">■ Do date</span>
         <span className="calendar-legend-due">□ Due date</span>
         <span className="calendar-legend-hint">Drag to reschedule</span>
+        {showHidden && (
+          <>
+            <span className="calendar-legend-skipped">▪ Skipped</span>
+            <span className="calendar-legend-achieved">▪ Achieved</span>
+            <span className="calendar-legend-archived">▪ Archived</span>
+          </>
+        )}
       </p>
 
       {isLoading && <p className="empty-state">Loading calendar…</p>}
@@ -363,7 +433,9 @@ export function CalendarPage() {
 
           <div className="calendar-events-layer">
             {entries.map((entry) => {
+              const isHiddenEntry = entry.visibility !== "normal";
               const showAchieve =
+                !isHiddenEntry &&
                 isToday &&
                 (entry.type === "do" || !doTaskIds.has(entry.taskId));
               const achievedToday = isTaskAchievedToday(entry.task.achievedAt);
@@ -384,7 +456,9 @@ export function CalendarPage() {
                   key={entry.key}
                   className={`calendar-event calendar-event--${entry.type}${
                     entry.isRecurringInstance ? " calendar-event--recurring" : ""
-                  }${isDraggingThis ? " calendar-event--dragging" : ""}`}
+                  }${entry.visibility !== "normal" ? ` calendar-event--${entry.visibility}` : ""}${
+                    isDraggingThis ? " calendar-event--dragging" : ""
+                  }`}
                   style={{
                     top,
                     height: Math.max(height, 28),
@@ -410,10 +484,7 @@ export function CalendarPage() {
                       />
                       <span className="calendar-event-name">{entry.task.name}</span>
                     </div>
-                    <span className="calendar-event-type">
-                      {entry.type === "do" ? "Do" : "Due"}
-                      {entry.isRecurringInstance ? " · Repeat" : ""}
-                    </span>
+                    <span className="calendar-event-type">{entryTypeLabel(entry)}</span>
                   </div>
                   <div className="calendar-event-actions">
                     {showAchieve && (
@@ -426,36 +497,66 @@ export function CalendarPage() {
                         {achievedToday ? "Done today" : "Achieve"}
                       </button>
                     )}
-                    <Link
-                      to={`/tasks/${entry.taskId}/edit`}
-                      state={{ returnTo: "/calendar" }}
-                      className="calendar-action-btn"
-                    >
-                      Edit
-                    </Link>
-                    <button
-                      type="button"
-                      className="calendar-action-btn calendar-action-btn--danger"
-                      onClick={() => {
-                        if (entry.isRecurringInstance) {
+                    {entry.visibility !== "archived" && (
+                      <Link
+                        to={`/tasks/${entry.taskId}/edit`}
+                        state={{ returnTo: "/calendar" }}
+                        className="calendar-action-btn"
+                      >
+                        Edit
+                      </Link>
+                    )}
+                    {entry.visibility === "skipped" && (
+                      <button
+                        type="button"
+                        className="calendar-action-btn"
+                        onClick={() => {
                           const dayKey = entry.occurrenceDayKey ?? selectedDate;
-                          if (
-                            confirm(
-                              "Remove this day only? The task will still repeat on other days."
-                            )
-                          ) {
-                            skipOccurrenceMutation.mutate({
-                              taskId: entry.taskId,
-                              dayKey,
-                            });
+                          unskipOccurrenceMutation.mutate({
+                            taskId: entry.taskId,
+                            dayKey,
+                          });
+                        }}
+                        disabled={unskipOccurrenceMutation.isPending}
+                      >
+                        Restore day
+                      </button>
+                    )}
+                    {entry.visibility === "archived" && (
+                      <button
+                        type="button"
+                        className="calendar-action-btn"
+                        onClick={() => restoreMutation.mutate(entry.taskId)}
+                        disabled={restoreMutation.isPending}
+                      >
+                        Restore
+                      </button>
+                    )}
+                    {entry.visibility === "normal" && (
+                      <button
+                        type="button"
+                        className="calendar-action-btn calendar-action-btn--danger"
+                        onClick={() => {
+                          if (entry.isRecurringInstance) {
+                            const dayKey = entry.occurrenceDayKey ?? selectedDate;
+                            if (
+                              confirm(
+                                "Remove this day only? The task will still repeat on other days."
+                              )
+                            ) {
+                              skipOccurrenceMutation.mutate({
+                                taskId: entry.taskId,
+                                dayKey,
+                              });
+                            }
+                          } else if (confirm("Delete this task?")) {
+                            deleteMutation.mutate(entry.taskId);
                           }
-                        } else if (confirm("Delete this task?")) {
-                          deleteMutation.mutate(entry.taskId);
-                        }
-                      }}
-                    >
-                      Delete
-                    </button>
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               );

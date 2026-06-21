@@ -10,6 +10,8 @@ export const CALENDAR_MIN_DO_MINUTES = 30;
 
 export type CalendarEntryType = "do" | "due";
 
+export type CalendarEntryVisibility = "normal" | "skipped" | "achieved" | "archived";
+
 export interface CalendarEntry {
   key: string;
   taskId: string;
@@ -19,6 +21,12 @@ export interface CalendarEntry {
   durationMinutes: number;
   occurrenceDayKey?: string;
   isRecurringInstance: boolean;
+  visibility: CalendarEntryVisibility;
+}
+
+export interface EntriesForDayOptions {
+  includeHidden?: boolean;
+  treatAsArchived?: boolean;
 }
 
 export function todayDateInput(): string {
@@ -72,10 +80,14 @@ function pushEntry(
   type: CalendarEntryType,
   iso: string,
   durationMinutes: number,
-  isRecurringInstance: boolean
+  isRecurringInstance: boolean,
+  visibility: CalendarEntryVisibility = "normal"
 ) {
+  const visibilitySuffix = visibility === "normal" ? "" : `-${visibility}`;
   entries.push({
-    key: isRecurringInstance ? `${task.id}-${dateInput}-${type}` : `${task.id}-${type}`,
+    key: isRecurringInstance
+      ? `${task.id}-${dateInput}-${type}${visibilitySuffix}`
+      : `${task.id}-${type}${visibilitySuffix}`,
     taskId: task.id,
     task,
     type,
@@ -83,16 +95,34 @@ function pushEntry(
     durationMinutes,
     occurrenceDayKey: isRecurringInstance ? dateInput : undefined,
     isRecurringInstance,
+    visibility,
   });
 }
 
-export function entriesForDay(tasks: Task[], dateInput: string): CalendarEntry[] {
+function recurringVisibility(
+  task: Task,
+  dateInput: string,
+  treatAsArchived: boolean
+): CalendarEntryVisibility | null {
+  if (treatAsArchived) return "archived";
+  if (isOccurrenceSkipped(task, dateInput)) return "skipped";
+  if (isOccurrenceAchieved(task, dateInput)) return "achieved";
+  return "normal";
+}
+
+export function entriesForDay(
+  tasks: Task[],
+  dateInput: string,
+  options: EntriesForDayOptions = {}
+): CalendarEntry[] {
+  const includeHidden = options.includeHidden ?? false;
+  const treatAsArchived = options.treatAsArchived ?? false;
   const entries: CalendarEntry[] = [];
 
   for (const task of tasks) {
     if (task.recurrence !== "None" && taskOccursOnDay(task, dateInput)) {
-      if (isOccurrenceAchieved(task, dateInput)) continue;
-      if (isOccurrenceSkipped(task, dateInput)) continue;
+      const visibility = recurringVisibility(task, dateInput, treatAsArchived);
+      if (!includeHidden && visibility !== "normal") continue;
 
       const occurrence = resolveOccurrenceForDay(task, dateInput);
       if (!occurrence) continue;
@@ -105,11 +135,14 @@ export function entriesForDay(tasks: Task[], dateInput: string): CalendarEntry[]
           "do",
           occurrence.scheduledAt,
           Math.max(CALENDAR_MIN_DO_MINUTES, task.durationMinutes ?? CALENDAR_MIN_DO_MINUTES),
-          true
+          true,
+          visibility ?? "normal"
         );
       }
       continue;
     }
+
+    const oneTimeVisibility: CalendarEntryVisibility = treatAsArchived ? "archived" : "normal";
 
     if (isSameLocalDay(task.scheduledAt, dateInput)) {
       pushEntry(
@@ -119,7 +152,8 @@ export function entriesForDay(tasks: Task[], dateInput: string): CalendarEntry[]
         "do",
         task.scheduledAt!,
         Math.max(CALENDAR_MIN_DO_MINUTES, task.durationMinutes ?? CALENDAR_MIN_DO_MINUTES),
-        false
+        false,
+        oneTimeVisibility
       );
     }
 
@@ -131,12 +165,31 @@ export function entriesForDay(tasks: Task[], dateInput: string): CalendarEntry[]
         "due",
         task.dueAt!,
         CALENDAR_DEFAULT_DUE_MINUTES,
-        false
+        false,
+        oneTimeVisibility
       );
     }
   }
 
   return entries.sort((a, b) => a.startMinutes - b.startMinutes);
+}
+
+export function entriesForDayMerged(
+  activeTasks: Task[],
+  archivedTasks: Task[],
+  dateInput: string,
+  showHidden: boolean
+): CalendarEntry[] {
+  const active = entriesForDay(activeTasks, dateInput, {
+    includeHidden: showHidden,
+  });
+  if (!showHidden) return active;
+
+  const archived = entriesForDay(archivedTasks, dateInput, {
+    includeHidden: true,
+    treatAsArchived: true,
+  });
+  return [...active, ...archived].sort((a, b) => a.startMinutes - b.startMinutes);
 }
 
 /** True when the task would appear on the calendar for the given day. */
@@ -274,4 +327,14 @@ export function isPlanningDone(userId: string, dateInput: string): boolean {
 
 export function setPlanningDone(userId: string, dateInput: string): void {
   localStorage.setItem(planningDoneStorageKey(userId, dateInput), "1");
+}
+
+const CALENDAR_SHOW_HIDDEN_KEY = "effortless:calendarShowHidden";
+
+export function isCalendarShowHidden(): boolean {
+  return localStorage.getItem(CALENDAR_SHOW_HIDDEN_KEY) === "1";
+}
+
+export function setCalendarShowHidden(show: boolean): void {
+  localStorage.setItem(CALENDAR_SHOW_HIDDEN_KEY, show ? "1" : "0");
 }

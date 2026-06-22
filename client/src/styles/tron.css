@@ -860,7 +860,7 @@ h3,
   text-align: center;
   font-size: 0.85rem;
   font-family: var(--font-display);
-  color: var(--success);
+  color: var(--text-dim);
 }
 
 .like-stat-key {
@@ -923,7 +923,7 @@ h3,
   text-align: center;
   font-size: 0.8rem;
   font-family: var(--font-display);
-  color: var(--text-dim);
+  color: var(--success);
 }
 
 .like-split-btn {

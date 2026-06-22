@@ -60,12 +60,17 @@ function availableCreditWhere(
   };
 }
 
-function usedCreditWhere(userId: string, likeId: string): Prisma.LikeCreditWhereInput {
+function usedCreditWhere(
+  userId: string,
+  likeId: string,
+  now: Date
+): Prisma.LikeCreditWhereInput {
   return {
     userId,
     likeId,
     usedAt: { not: null },
     voidedAt: null,
+    expiresAt: { gt: now },
   };
 }
 
@@ -77,7 +82,7 @@ export async function countLikeCredits(
 ): Promise<LikeCreditCounts> {
   const [availableCount, usedCount] = await Promise.all([
     tx.likeCredit.count({ where: availableCreditWhere(userId, likeId, now) }),
-    tx.likeCredit.count({ where: usedCreditWhere(userId, likeId) }),
+    tx.likeCredit.count({ where: usedCreditWhere(userId, likeId, now) }),
   ]);
   const rewardedCount = availableCount + usedCount;
   return { availableCount, usedCount, rewardedCount };
@@ -103,7 +108,7 @@ async function voidOldestAvailableCredits(
   likeId: string,
   count: number,
   now: Date
-): Promise<void> {
+): Promise<LikeCredit[]> {
   const credits = await availableCreditsFifo(tx, userId, likeId, now, count);
   if (credits.length < count) {
     throw new Error("Not enough available credits");
@@ -112,6 +117,7 @@ async function voidOldestAvailableCredits(
     where: { id: { in: credits.map((c) => c.id) } },
     data: { voidedAt: now },
   });
+  return credits;
 }
 
 async function markUsedFifo(
@@ -135,10 +141,11 @@ async function unmarkUsedFifo(
   tx: Tx,
   userId: string,
   likeId: string,
-  count: number
+  count: number,
+  now: Date
 ): Promise<void> {
   const credits = await tx.likeCredit.findMany({
-    where: usedCreditWhere(userId, likeId),
+    where: usedCreditWhere(userId, likeId, now),
     orderBy: { usedAt: "desc" },
     take: count,
   });
@@ -401,6 +408,7 @@ export async function likesWithTracking(
       userId,
       voidedAt: null,
       usedAt: { not: null },
+      expiresAt: { gt: now },
     },
     _count: { _all: true },
   });
@@ -493,7 +501,7 @@ export async function adjustLikeUsedCount(
 
   await prisma.$transaction(async (tx) => {
     const current = await tx.likeCredit.count({
-      where: usedCreditWhere(userId, likeId),
+      where: usedCreditWhere(userId, likeId, now),
     });
 
     let target: number;
@@ -508,7 +516,7 @@ export async function adjustLikeUsedCount(
     if (target > current) {
       await markUsedFifo(tx, userId, likeId, target - current, now);
     } else if (target < current) {
-      await unmarkUsedFifo(tx, userId, likeId, current - target);
+      await unmarkUsedFifo(tx, userId, likeId, current - target, now);
     }
   });
 
@@ -584,7 +592,8 @@ export async function splitLikeCredit(
       throw new Error("Not enough available credits to split");
     }
 
-    await voidOldestAvailableCredits(tx, userId, source.id, 1, now);
+    const voided = await voidOldestAvailableCredits(tx, userId, source.id, 1, now);
+    const inheritedEarnedAt = voided[0]!.earnedAt;
 
     await tx.likeCreditLedger.create({
       data: {
@@ -616,7 +625,7 @@ export async function splitLikeCredit(
           "split",
           ledger.id,
           timeZoneInput,
-          now
+          inheritedEarnedAt
         );
       }
     }
@@ -671,8 +680,10 @@ export async function combineLikeCredits(
       }
     }
 
+    const voidedCredits: LikeCredit[] = [];
     for (const { likeId, count } of normalized) {
-      await voidOldestAvailableCredits(tx, userId, likeId, count, now);
+      const voided = await voidOldestAvailableCredits(tx, userId, likeId, count, now);
+      voidedCredits.push(...voided);
 
       await tx.likeCreditLedger.create({
         data: {
@@ -684,6 +695,11 @@ export async function combineLikeCredits(
         },
       });
     }
+
+    const inheritedEarnedAt = voidedCredits.reduce(
+      (oldest, credit) => (credit.earnedAt < oldest ? credit.earnedAt : oldest),
+      voidedCredits[0]!.earnedAt
+    );
 
     const targetLedger = await tx.likeCreditLedger.create({
       data: {
@@ -703,7 +719,7 @@ export async function combineLikeCredits(
       "combine",
       targetLedger.id,
       timeZoneInput,
-      now
+      inheritedEarnedAt
     );
   });
 }

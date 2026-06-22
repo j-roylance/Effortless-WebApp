@@ -38,7 +38,7 @@ export function LikeUsageStepper({
         keyLabel="E"
         value={earnedCount}
         className="like-usage-earned"
-        title="Earned this period (available + used)"
+        title="Active earned (available + used, not expired)"
       />
       <div className="like-usage-stepper">
         <button
@@ -54,7 +54,7 @@ export function LikeUsageStepper({
           keyLabel="U"
           value={usedCount}
           className="like-usage-used"
-          title="Used this period"
+          title="Active used (not expired)"
         />
         <button
           type="button"

@@ -248,6 +248,19 @@ async function main() {
       tracking.trackingByTier[RewardTier.Silver].usableLifetimeLabel.includes("24 hours")
     );
 
+    const inheritedEarnedAt = new Date(Date.now() - 20 * 60 * 60 * 1000);
+    const silverGrantCredit = await prisma.likeCredit.findFirst({
+      where: { userId: user.id, likeId: silverLike.id, voidedAt: null },
+    });
+    assert("silver grant credit exists", !!silverGrantCredit);
+    await prisma.likeCredit.update({
+      where: { id: silverGrantCredit!.id },
+      data: {
+        earnedAt: inheritedEarnedAt,
+        expiresAt: expiresAtForTier(inheritedEarnedAt, RewardTier.Silver, "UTC"),
+      },
+    });
+
     await splitLikeCredit(
       user.id,
       silverLike.id,
@@ -266,6 +279,42 @@ async function main() {
     assert("split credits bronze available", bronzeAfter?.availableCount === 1);
     assert("split credits bronze earned", bronzeAfter?.rewardedCount === 1);
 
+    const bronzeCreditAfterSplit = await prisma.likeCredit.findFirst({
+      where: { userId: user.id, likeId: bronzeLike.id, voidedAt: null },
+    });
+    const expectedBronzeExpiry = expiresAtForTier(inheritedEarnedAt, RewardTier.Bronze, "UTC");
+    assert(
+      "split inherits source earnedAt expiry",
+      bronzeCreditAfterSplit?.expiresAt.getTime() === expectedBronzeExpiry.getTime(),
+      `${bronzeCreditAfterSplit?.expiresAt.toISOString()} vs ${expectedBronzeExpiry.toISOString()}`
+    );
+    assert(
+      "split does not reset to fresh 24h",
+      bronzeCreditAfterSplit!.expiresAt.getTime() < Date.now() + 23 * 60 * 60 * 1000
+    );
+
+    const olderBronzeEarnedAt = new Date(Date.now() - 18 * 60 * 60 * 1000);
+    const newerBronzeEarnedAt = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    const bronzeCredits = await prisma.likeCredit.findMany({
+      where: { userId: user.id, likeId: { in: [bronzeLike.id, bronzeLike2.id] }, voidedAt: null },
+      orderBy: { likeId: "asc" },
+    });
+    assert("two bronze credits after split", bronzeCredits.length === 2);
+    await prisma.likeCredit.update({
+      where: { id: bronzeCredits[0]!.id },
+      data: {
+        earnedAt: olderBronzeEarnedAt,
+        expiresAt: expiresAtForTier(olderBronzeEarnedAt, RewardTier.Bronze, "UTC"),
+      },
+    });
+    await prisma.likeCredit.update({
+      where: { id: bronzeCredits[1]!.id },
+      data: {
+        earnedAt: newerBronzeEarnedAt,
+        expiresAt: expiresAtForTier(newerBronzeEarnedAt, RewardTier.Bronze, "UTC"),
+      },
+    });
+
     await combineLikeCredits(
       user.id,
       silverLike.id,
@@ -281,6 +330,16 @@ async function main() {
     assert("combine restores silver available", silverCombined?.availableCount === 1);
     assert("combine silver earned", silverCombined?.rewardedCount === 1);
 
+    const silverCreditAfterCombine = await prisma.likeCredit.findFirst({
+      where: { userId: user.id, likeId: silverLike.id, voidedAt: null },
+    });
+    const expectedSilverExpiry = expiresAtForTier(olderBronzeEarnedAt, RewardTier.Silver, "UTC");
+    assert(
+      "combine inherits oldest earnedAt",
+      silverCreditAfterCombine?.expiresAt.getTime() === expectedSilverExpiry.getTime(),
+      `${silverCreditAfterCombine?.expiresAt.toISOString()} vs ${expectedSilverExpiry.toISOString()}`
+    );
+
     await adjustLikeUsedCount(user.id, silverLike.id, "UTC", 1);
     const afterUsed = await likesWithTracking(user.id, "UTC");
     const silverUsed = afterUsed.likes.find((l) => l.id === silverLike.id);
@@ -295,7 +354,8 @@ async function main() {
     const afterExpiry = await likesWithTracking(user.id, "UTC");
     const silverExpired = afterExpiry.likes.find((l) => l.id === silverLike.id);
     assert("expired credit drops available", silverExpired?.availableCount === 0);
-    assert("used credit stays in earned", silverExpired?.rewardedCount === 1);
+    assert("expired used credit drops earned", silverExpired?.rewardedCount === 0);
+    assert("expired used credit drops used", silverExpired?.usedCount === 0);
 
     await prisma.habit.create({
       data: {

@@ -439,7 +439,8 @@ async function main() {
         spinPitySettings: {
           enabled: true,
           oneLoss: { win: 50, levelUp: 25, noReward: 12, levelDown: 13 },
-          maxLoss: { win: 80, levelUp: 25, noReward: 0, levelDown: 0 },
+          // Must sum to 100 and keep levelUp matching base (25); distinct from default maxLoss win 75.
+          maxLoss: { win: 70, levelUp: 25, noReward: 3, levelDown: 2 },
         },
       },
     });
@@ -447,7 +448,8 @@ async function main() {
     assert(
       "pity custom maxLoss profile",
       customBronzePity.consecutiveLosses === 2 &&
-        customBronzePity.effectiveWeights.win === 80
+        customBronzePity.effectiveWeights.win === 70,
+      `losses=${customBronzePity.consecutiveLosses} win=${customBronzePity.effectiveWeights.win}`
     );
   } finally {
     await prisma.user.delete({ where: { id: user.id } });

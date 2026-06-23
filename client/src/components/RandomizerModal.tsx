@@ -45,6 +45,24 @@ export function RandomizerModal({
 
   const revealTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const mountedRef = useRef(true);
+  const pendingSyncRef = useRef({ tokens: false, likes: false });
+
+  function flushTokens() {
+    if (!pendingSyncRef.current.tokens) return;
+    pendingSyncRef.current.tokens = false;
+    queryClient.invalidateQueries({ queryKey: ["tokens"] });
+  }
+
+  function flushLikes() {
+    if (!pendingSyncRef.current.likes) return;
+    pendingSyncRef.current.likes = false;
+    queryClient.invalidateQueries({ queryKey: ["likes"] });
+  }
+
+  function flushAllPending() {
+    flushTokens();
+    flushLikes();
+  }
 
   const { data: settings } = useQuery({
     queryKey: ["daily-settings"],
@@ -85,6 +103,7 @@ export function RandomizerModal({
     return () => {
       mountedRef.current = false;
       if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+      flushAllPending();
     };
   }, []);
 
@@ -98,16 +117,24 @@ export function RandomizerModal({
       setResult(data);
       setSkipOutcomeRoll(false);
       setSkipWheel(false);
+      pendingSyncRef.current = {
+        tokens: true,
+        likes: spinNeedsLikeWheel(data),
+      };
       setPhase("outcomeRoll");
-      queryClient.invalidateQueries({ queryKey: ["tokens"] });
-      queryClient.invalidateQueries({ queryKey: ["likes"] });
     },
   });
 
   function handleOutcomeRollComplete(skipped = false) {
     if (!result) return;
+    flushTokens();
     setPhase("outcomeReveal");
     advanceFromReveal(result, skipped);
+  }
+
+  function handleWheelSpinEnd() {
+    flushLikes();
+    setPhase("done");
   }
 
   const outcome = result?.outcome;
@@ -190,7 +217,7 @@ export function RandomizerModal({
               tier={result.effectiveTier}
               spinning
               skip={skipWheel}
-              onSpinEnd={() => setPhase("done")}
+              onSpinEnd={handleWheelSpinEnd}
             />
             <SkipAnimationButton onClick={() => setSkipWheel(true)} />
           </>

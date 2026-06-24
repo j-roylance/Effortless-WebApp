@@ -47,7 +47,7 @@ export function classifyTaskTimeBucket(task: Task, todayKey: string): TaskTimeBu
   const schedKey = task.scheduledAt ? toLocalDateInput(task.scheduledAt) : null;
   const dueKey = task.dueAt ? toLocalDateInput(task.dueAt) : null;
 
-  if (!schedKey && !dueKey) return "future";
+  if (!schedKey && !dueKey) return "today";
 
   if ((schedKey && schedKey > todayKey) || (dueKey && dueKey > todayKey)) {
     return "future";

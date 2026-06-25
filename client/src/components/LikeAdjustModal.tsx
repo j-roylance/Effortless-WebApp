@@ -66,21 +66,19 @@ export function LikeAdjustModal({
 
   const applyMutation = useMutation({
     mutationFn: async () => {
-      await Promise.all(
-        changedLikes.map((like) => {
-          const draft = draftById[like.id]!;
-          return api<{ usedCount: number; availableCount: number }>(
-            `/likes/${like.id}/credits`,
-            {
-              method: "PATCH",
-              body: JSON.stringify({
-                usedCount: draft.usedCount,
-                availableCount: draft.availableCount,
-              }),
-            }
-          );
-        })
-      );
+      for (const like of changedLikes) {
+        const draft = draftById[like.id]!;
+        await api<{ usedCount: number; availableCount: number }>(
+          `/likes/${like.id}/credits`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              usedCount: draft.usedCount,
+              availableCount: draft.availableCount,
+            }),
+          }
+        );
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["likes"] });

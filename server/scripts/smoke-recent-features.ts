@@ -348,6 +348,37 @@ async function main() {
     assert("mark used increments used", silverUsed?.usedCount === 1);
     assert("earned stays after use", silverUsed?.rewardedCount === 1);
 
+    let markUsedWithoutAvailableThrew = false;
+    try {
+      await adjustLikeUsedCount(user.id, silverLike.id, "UTC", 1);
+    } catch (e) {
+      markUsedWithoutAvailableThrew = true;
+      assert(
+        "mark used without available throws",
+        (e as Error).message.includes("Not enough available credits")
+      );
+    }
+    assert("mark used without available rejects", markUsedWithoutAvailableThrew);
+
+    await adjustLikeCredits(user.id, silverLike.id, "UTC", {
+      usedCount: 3,
+      availableCount: 0,
+    });
+    const afterAllUsed = await likesWithTracking(user.id, "UTC");
+    const silverAllUsed = afterAllUsed.likes.find((l) => l.id === silverLike.id);
+    assert("rebuild all used", silverAllUsed?.usedCount === 3);
+    assert("rebuild all used zeroes available", silverAllUsed?.availableCount === 0);
+
+    await adjustLikeCredits(user.id, silverLike.id, "UTC", {
+      usedCount: 1,
+      availableCount: 1,
+    });
+    const afterRebuild = await likesWithTracking(user.id, "UTC");
+    const silverRebuilt = afterRebuild.likes.find((l) => l.id === silverLike.id);
+    assert("rebuild from all-used sets used", silverRebuilt?.usedCount === 1);
+    assert("rebuild from all-used sets available", silverRebuilt?.availableCount === 1);
+    assert("rebuild from all-used earned total", silverRebuilt?.rewardedCount === 2);
+
     await adjustLikeCredits(user.id, bronzeLike.id, "UTC", { availableCount: 2 });
     const afterAdjustAvailable = await likesWithTracking(user.id, "UTC");
     const bronzeAdjusted = afterAdjustAvailable.likes.find((l) => l.id === bronzeLike.id);

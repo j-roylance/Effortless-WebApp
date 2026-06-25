@@ -60,7 +60,7 @@ export function LikeUsageStepper({
           type="button"
           className="like-usage-btn"
           aria-label="Increase used count"
-          disabled={disabled}
+          disabled={disabled || availableCount <= 0}
           onClick={() => onDelta(1)}
         >
           +

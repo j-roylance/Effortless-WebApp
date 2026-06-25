@@ -112,6 +112,18 @@ export function expiresAtForTier(
   return addCalendarYearsInTimezone(earnedAt, 1, timeZone);
 }
 
+/** earnedAt for a credit created by split/combine when inheriting a source timestamp. */
+export function earnedAtForConvertedCredit(
+  inheritedEarnedAt: Date,
+  outputTier: RewardTier,
+  timeZoneInput: string,
+  now: Date
+): Date {
+  const inheritedExpiry = expiresAtForTier(inheritedEarnedAt, outputTier, timeZoneInput);
+  if (inheritedExpiry > now) return inheritedEarnedAt;
+  return now;
+}
+
 function startOfBucket(date: Date, bucket: Bucket, timeZone: string): Date {
   const tz = safeTimeZone(timeZone);
   if (bucket === "day") return startOfLocalDayUtc(tz, date);

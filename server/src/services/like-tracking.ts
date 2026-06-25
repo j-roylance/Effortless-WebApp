@@ -12,6 +12,7 @@ import {
   TIERS,
   TIER_USABLE_LIFETIME_LABEL,
   bucketKeyForTier,
+  earnedAtForConvertedCredit,
   expiresAtForTier,
 } from "../domain/tiers.js";
 import { prisma } from "../lib/prisma.js";
@@ -594,6 +595,12 @@ export async function splitLikeCredit(
 
     const voided = await voidOldestAvailableCredits(tx, userId, source.id, 1, now);
     const inheritedEarnedAt = voided[0]!.earnedAt;
+    const outputEarnedAt = earnedAtForConvertedCredit(
+      inheritedEarnedAt,
+      lowerTier,
+      timeZoneInput,
+      now
+    );
 
     await tx.likeCreditLedger.create({
       data: {
@@ -625,7 +632,7 @@ export async function splitLikeCredit(
           "split",
           ledger.id,
           timeZoneInput,
-          inheritedEarnedAt
+          outputEarnedAt
         );
       }
     }

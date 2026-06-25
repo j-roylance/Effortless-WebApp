@@ -25,7 +25,7 @@ import {
   syncPityLevelUp,
   validateSpinPitySettings,
 } from "../src/domain/spin-pity.js";
-import { expiresAtForTier } from "../src/domain/tiers.js";
+import { earnedAtForConvertedCredit, expiresAtForTier } from "../src/domain/tiers.js";
 import { prisma } from "../src/lib/prisma.js";
 import { exportAccountBackup, importAccountBackup } from "../src/services/account-backup.js";
 import {
@@ -357,6 +357,74 @@ async function main() {
     assert("expired used credit drops earned", silverExpired?.rewardedCount === 0);
     assert("expired used credit drops used", silverExpired?.usedCount === 0);
 
+    const platinumLike1 = await prisma.userReward.create({
+      data: { userId: user.id, tier: RewardTier.Platinum, label: "Smoke Platinum A" },
+    });
+    const platinumLike2 = await prisma.userReward.create({
+      data: { userId: user.id, tier: RewardTier.Platinum, label: "Smoke Platinum B" },
+    });
+    const platinumLike3 = await prisma.userReward.create({
+      data: { userId: user.id, tier: RewardTier.Platinum, label: "Smoke Platinum C" },
+    });
+    const royalLike = await prisma.userReward.create({
+      data: { userId: user.id, tier: RewardTier.Royal, label: "Smoke Royal" },
+    });
+
+    await prisma.$transaction((tx) =>
+      logLikeGrant(tx, user.id, royalLike.id, RewardTier.Royal, "smoke_test", "UTC")
+    );
+
+    const agedRoyalEarnedAt = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    const royalGrantCredit = await prisma.likeCredit.findFirst({
+      where: { userId: user.id, likeId: royalLike.id, voidedAt: null },
+    });
+    assert("royal grant credit exists", !!royalGrantCredit);
+    await prisma.likeCredit.update({
+      where: { id: royalGrantCredit!.id },
+      data: {
+        earnedAt: agedRoyalEarnedAt,
+        expiresAt: expiresAtForTier(agedRoyalEarnedAt, RewardTier.Royal, "UTC"),
+      },
+    });
+    assert(
+      "aged royal still available before split",
+      expiresAtForTier(agedRoyalEarnedAt, RewardTier.Royal, "UTC").getTime() > Date.now()
+    );
+    assert(
+      "aged royal would expire platinum if inherited blindly",
+      expiresAtForTier(agedRoyalEarnedAt, RewardTier.Platinum, "UTC").getTime() < Date.now()
+    );
+    assert(
+      "earnedAtForConvertedCredit resets expired inheritance",
+      earnedAtForConvertedCredit(agedRoyalEarnedAt, RewardTier.Platinum, "UTC", new Date()).getTime() >=
+        Date.now() - 1000
+    );
+
+    await splitLikeCredit(
+      user.id,
+      royalLike.id,
+      [
+        { likeId: platinumLike1.id, count: 1 },
+        { likeId: platinumLike2.id, count: 1 },
+        { likeId: platinumLike3.id, count: 1 },
+      ],
+      "UTC"
+    );
+
+    const afterRoyalSplit = await likesWithTracking(user.id, "UTC");
+    const royalAfter = afterRoyalSplit.likes.find((l) => l.id === royalLike.id);
+    const platinumAvailable = [platinumLike1, platinumLike2, platinumLike3].reduce(
+      (sum, like) =>
+        sum + (afterRoyalSplit.likes.find((l) => l.id === like.id)?.availableCount ?? 0),
+      0
+    );
+    assert("royal split reduces royal available", royalAfter?.availableCount === 0);
+    assert(
+      "royal split credits platinum available",
+      platinumAvailable === 3,
+      `expected 3, got ${platinumAvailable}`
+    );
+
     await prisma.habit.create({
       data: {
         userId: user.id,
@@ -374,7 +442,7 @@ async function main() {
     assert("backup format", exported.format === BACKUP_FORMAT);
     assert("backup version", exported.version === BACKUP_VERSION);
     assert("backup has aiRecoveryGuide", exported.aiRecoveryGuide.length > 100);
-    assert("backup likes count", exported.data.likes.length === 3);
+    assert("backup likes count", exported.data.likes.length === 7);
     assert("backup likeCredits count", exported.data.likeCredits.length > 0);
 
     const countsBefore = {

@@ -29,6 +29,7 @@ import { earnedAtForConvertedCredit, expiresAtForTier } from "../src/domain/tier
 import { prisma } from "../src/lib/prisma.js";
 import { exportAccountBackup, importAccountBackup } from "../src/services/account-backup.js";
 import {
+  adjustLikeCredits,
   adjustLikeUsedCount,
   likesWithTracking,
   combineLikeCredits,
@@ -346,6 +347,22 @@ async function main() {
     assert("mark used reduces available", silverUsed?.availableCount === 0);
     assert("mark used increments used", silverUsed?.usedCount === 1);
     assert("earned stays after use", silverUsed?.rewardedCount === 1);
+
+    await adjustLikeCredits(user.id, bronzeLike.id, "UTC", { availableCount: 2 });
+    const afterAdjustAvailable = await likesWithTracking(user.id, "UTC");
+    const bronzeAdjusted = afterAdjustAvailable.likes.find((l) => l.id === bronzeLike.id);
+    assert("adjust available sets count", bronzeAdjusted?.availableCount === 2);
+    assert("adjust available preserves used", bronzeAdjusted?.usedCount === 0);
+
+    await adjustLikeCredits(user.id, bronzeLike2.id, "UTC", {
+      usedCount: 1,
+      availableCount: 2,
+    });
+    const afterAdjustBoth = await likesWithTracking(user.id, "UTC");
+    const bronzeBoth = afterAdjustBoth.likes.find((l) => l.id === bronzeLike2.id);
+    assert("adjust both sets used", bronzeBoth?.usedCount === 1);
+    assert("adjust both sets available", bronzeBoth?.availableCount === 2);
+    assert("adjust both earned total", bronzeBoth?.rewardedCount === 3);
 
     await prisma.likeCredit.updateMany({
       where: { userId: user.id, likeId: silverLike.id },

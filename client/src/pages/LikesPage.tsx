@@ -17,6 +17,7 @@ import {
 import { LikeUsageStepper } from "../components/LikeUsageStepper";
 import { LikeSplitModal } from "../components/LikeSplitModal";
 import { LikeCombineModal } from "../components/LikeCombineModal";
+import { LikeAdjustModal } from "../components/LikeAdjustModal";
 import { PageHeader } from "../components/PageHeader";
 import { QueryErrorBanner } from "../components/QueryErrorBanner";
 import { Toast } from "../components/Toast";
@@ -36,6 +37,7 @@ export function LikesPage() {
   const [pendingUsedLikeId, setPendingUsedLikeId] = useState<string | null>(null);
   const [splitLike, setSplitLike] = useState<UserLike | null>(null);
   const [combineTier, setCombineTier] = useState<RewardTier | null>(null);
+  const [adjustTier, setAdjustTier] = useState<RewardTier | null>(null);
 
   const {
     data: likesData,
@@ -91,16 +93,6 @@ export function LikesPage() {
     onSettled: () => setPendingUsedLikeId(null),
   });
 
-  const resetTierMutation = useMutation({
-    mutationFn: (tier: RewardTier) =>
-      api("/likes/reset-tier", {
-        method: "POST",
-        body: JSON.stringify({ tier }),
-      }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["likes"] }),
-    onError: (err: Error) => setToast(err.message),
-  });
-
   const likes = likesData?.likes ?? [];
   const likesByTier = TIERS.reduce(
     (acc, tier) => {
@@ -115,12 +107,6 @@ export function LikesPage() {
   const pityByTier = tokenData?.pityByTier;
   const baseSpinWeights =
     settingsData?.spinOutcomeWeights ?? DEFAULT_DAILY_SETTINGS.spinOutcomeWeights;
-
-  function handleResetTier(tier: RewardTier) {
-    if (confirm(`Reset all active ${tier} like credits for this tier?`)) {
-      resetTierMutation.mutate(tier);
-    }
-  }
 
   return (
     <>
@@ -195,11 +181,10 @@ export function LikesPage() {
                 <button
                   type="button"
                   className="neon-btn neon-btn-sm"
-                  disabled={resetTierMutation.isPending}
-                  onClick={() => handleResetTier(tier)}
-                  title="Reset active like credits for this tier"
+                  onClick={() => setAdjustTier(tier)}
+                  title="Adjust used and available credits for this tier"
                 >
-                  Reset
+                  Adjust
                 </button>
                 <button
                   type="button"
@@ -329,6 +314,14 @@ export function LikesPage() {
           targetTierLikes={likesByTier[combineTier]}
           lowerTierLikes={likesByTier[lowerTierFor(combineTier)]}
           onClose={() => setCombineTier(null)}
+        />
+      )}
+
+      {adjustTier && (
+        <LikeAdjustModal
+          tier={adjustTier}
+          tierLikes={likesByTier[adjustTier]}
+          onClose={() => setAdjustTier(null)}
         />
       )}
 

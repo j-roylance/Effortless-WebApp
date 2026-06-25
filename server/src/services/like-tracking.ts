@@ -159,6 +159,102 @@ async function unmarkUsedFifo(
   });
 }
 
+async function createAdjustmentCredits(
+  tx: Tx,
+  userId: string,
+  likeId: string,
+  tier: RewardTier,
+  timeZoneInput: string,
+  count: number,
+  now: Date
+): Promise<void> {
+  for (let i = 0; i < count; i += 1) {
+    await createLikeCredit(tx, userId, likeId, tier, "adjust", null, timeZoneInput, now);
+  }
+}
+
+async function reduceRewardedCountTo(
+  tx: Tx,
+  userId: string,
+  likeId: string,
+  targetTotal: number,
+  now: Date
+): Promise<void> {
+  let counts = await countLikeCredits(userId, likeId, now, tx);
+  while (counts.rewardedCount > targetTotal) {
+    if (counts.availableCount > 0) {
+      await voidOldestAvailableCredits(tx, userId, likeId, 1, now);
+    } else if (counts.usedCount > 0) {
+      await unmarkUsedFifo(tx, userId, likeId, 1, now);
+      await voidOldestAvailableCredits(tx, userId, likeId, 1, now);
+    } else {
+      break;
+    }
+    counts = await countLikeCredits(userId, likeId, now, tx);
+  }
+}
+
+async function setUsedCountInTx(
+  tx: Tx,
+  userId: string,
+  likeId: string,
+  tier: RewardTier,
+  timeZoneInput: string,
+  targetUsed: number,
+  now: Date
+): Promise<void> {
+  const target = Math.max(0, Math.floor(targetUsed));
+  const current = await tx.likeCredit.count({
+    where: usedCreditWhere(userId, likeId, now),
+  });
+
+  if (target > current) {
+    const need = target - current;
+    const counts = await countLikeCredits(userId, likeId, now, tx);
+    if (counts.availableCount < need) {
+      await createAdjustmentCredits(
+        tx,
+        userId,
+        likeId,
+        tier,
+        timeZoneInput,
+        need - counts.availableCount,
+        now
+      );
+    }
+    await markUsedFifo(tx, userId, likeId, need, now);
+  } else if (target < current) {
+    await unmarkUsedFifo(tx, userId, likeId, current - target, now);
+  }
+}
+
+async function setAvailableCountInTx(
+  tx: Tx,
+  userId: string,
+  likeId: string,
+  tier: RewardTier,
+  timeZoneInput: string,
+  targetAvailable: number,
+  now: Date
+): Promise<void> {
+  const target = Math.max(0, Math.floor(targetAvailable));
+  const counts = await countLikeCredits(userId, likeId, now, tx);
+
+  if (target > counts.availableCount) {
+    await createAdjustmentCredits(
+      tx,
+      userId,
+      likeId,
+      tier,
+      timeZoneInput,
+      target - counts.availableCount,
+      now
+    );
+  } else if (target < counts.availableCount) {
+    await voidOldestAvailableCredits(tx, userId, likeId, counts.availableCount - target, now);
+  }
+}
+
 export async function createLikeCredit(
   tx: Tx,
   userId: string,
@@ -492,7 +588,6 @@ export async function adjustLikeUsedCount(
   delta?: number,
   usedCount?: number
 ): Promise<{ usedCount: number }> {
-  void timeZoneInput;
   const like = await prisma.userReward.findFirst({
     where: { id: likeId, userId },
   });
@@ -514,15 +609,85 @@ export async function adjustLikeUsedCount(
       throw new Error("Provide delta or usedCount");
     }
 
-    if (target > current) {
-      await markUsedFifo(tx, userId, likeId, target - current, now);
-    } else if (target < current) {
-      await unmarkUsedFifo(tx, userId, likeId, current - target, now);
-    }
+    await setUsedCountInTx(tx, userId, likeId, like.tier, timeZoneInput, target, now);
   });
 
   const { usedCount: next } = await countLikeCredits(userId, likeId, now);
   return { usedCount: next };
+}
+
+export async function adjustLikeCredits(
+  userId: string,
+  likeId: string,
+  timeZoneInput: string,
+  targets: { usedCount?: number; availableCount?: number }
+): Promise<{ usedCount: number; availableCount: number }> {
+  if (targets.usedCount === undefined && targets.availableCount === undefined) {
+    throw new Error("Provide usedCount or availableCount");
+  }
+
+  const like = await prisma.userReward.findFirst({
+    where: { id: likeId, userId },
+  });
+  if (!like) throw Object.assign(new Error("Not found"), { status: 404 });
+
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    const hasUsed = targets.usedCount !== undefined;
+    const hasAvailable = targets.availableCount !== undefined;
+
+    if (hasUsed && hasAvailable) {
+      const targetUsed = Math.max(0, Math.floor(targets.usedCount!));
+      const targetAvailable = Math.max(0, Math.floor(targets.availableCount!));
+      const targetTotal = targetUsed + targetAvailable;
+      let counts = await countLikeCredits(userId, likeId, now, tx);
+
+      if (counts.rewardedCount < targetTotal) {
+        await createAdjustmentCredits(
+          tx,
+          userId,
+          likeId,
+          like.tier,
+          timeZoneInput,
+          targetTotal - counts.rewardedCount,
+          now
+        );
+      } else if (counts.rewardedCount > targetTotal) {
+        await reduceRewardedCountTo(tx, userId, likeId, targetTotal, now);
+      }
+
+      await setUsedCountInTx(tx, userId, likeId, like.tier, timeZoneInput, targetUsed, now);
+      return;
+    }
+
+    if (hasAvailable) {
+      await setAvailableCountInTx(
+        tx,
+        userId,
+        likeId,
+        like.tier,
+        timeZoneInput,
+        targets.availableCount!,
+        now
+      );
+    }
+
+    if (hasUsed) {
+      await setUsedCountInTx(
+        tx,
+        userId,
+        likeId,
+        like.tier,
+        timeZoneInput,
+        targets.usedCount!,
+        now
+      );
+    }
+  });
+
+  const counts = await countLikeCredits(userId, likeId, now);
+  return { usedCount: counts.usedCount, availableCount: counts.availableCount };
 }
 
 function validateAllocations(

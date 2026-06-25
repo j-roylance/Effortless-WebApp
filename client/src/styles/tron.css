@@ -1077,6 +1077,53 @@ h3,
   margin-top: 1rem;
 }
 
+.like-adjust-item {
+  flex-wrap: wrap;
+}
+
+.like-adjust-fields {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.like-adjust-field {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.like-adjust-field-label {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  font-weight: 600;
+  min-width: 1rem;
+}
+
+.like-adjust-input {
+  width: 3.5rem;
+  padding: 0.25rem 0.35rem;
+  text-align: center;
+}
+
+.like-adjust-earned {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  min-width: 2.5rem;
+}
+
+.like-adjust-footer {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-dim);
+}
+
+.like-adjust-reset-btn {
+  color: var(--danger, #ff6b6b);
+  border-color: color-mix(in srgb, var(--danger, #ff6b6b) 40%, transparent);
+}
+
 .add-like-row {
   display: flex;
   gap: 0.5rem;

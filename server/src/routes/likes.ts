@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { isValidTier } from "../domain/tiers.js";
 import { safeTimeZone } from "../domain/daily.js";
 import {
+  adjustLikeCredits,
   adjustLikeUsedCount,
   combineLikeCredits,
   likesWithTracking,
@@ -27,6 +28,15 @@ const usedBodySchema = z
   })
   .refine((b) => b.delta !== undefined || b.usedCount !== undefined, {
     message: "Provide delta or usedCount",
+  });
+
+const creditsBodySchema = z
+  .object({
+    usedCount: z.number().int().min(0).optional(),
+    availableCount: z.number().int().min(0).optional(),
+  })
+  .refine((b) => b.usedCount !== undefined || b.availableCount !== undefined, {
+    message: "Provide usedCount or availableCount",
   });
 
 const resetTierSchema = z.object({
@@ -117,6 +127,19 @@ likesRouter.post("/:id/split", async (req: AuthedRequest, res) => {
     const timeZone = safeTimeZone(String(req.headers["x-timezone"] ?? "UTC"));
     await splitLikeCredit(req.user!.userId, likeId, body.allocations, timeZone);
     res.json({ ok: true });
+  } catch (e) {
+    const err = e as Error & { status?: number };
+    res.status(err.status ?? 400).json({ error: err.message });
+  }
+});
+
+likesRouter.patch("/:id/credits", async (req: AuthedRequest, res) => {
+  try {
+    const likeId = String(req.params.id);
+    const body = creditsBodySchema.parse(req.body);
+    const timeZone = safeTimeZone(String(req.headers["x-timezone"] ?? "UTC"));
+    const result = await adjustLikeCredits(req.user!.userId, likeId, timeZone, body);
+    res.json(result);
   } catch (e) {
     const err = e as Error & { status?: number };
     res.status(err.status ?? 400).json({ error: err.message });

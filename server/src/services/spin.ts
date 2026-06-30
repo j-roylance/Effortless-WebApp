@@ -112,6 +112,7 @@ export interface SpinResult {
 export interface SpinPityStatus {
   consecutiveLosses: number;
   effectiveWeights: SpinOutcomeWeights;
+  baseWeights: SpinOutcomeWeights;
 }
 
 async function getSpinWeightSettings(userId: string): Promise<{
@@ -149,7 +150,13 @@ export async function getPityStatusForTier(
 ): Promise<SpinPityStatus> {
   const { base, pity } = weightSettings ?? (await getSpinWeightSettings(userId));
   const recent = await recentSpinsForTier(userId, tokenTier);
-  return effectiveWeightsForTier(base, tokenTier, recent, pity);
+  const { consecutiveLosses, effectiveWeights } = effectiveWeightsForTier(
+    base,
+    tokenTier,
+    recent,
+    pity
+  );
+  return { consecutiveLosses, effectiveWeights, baseWeights: base };
 }
 
 export async function getPityStatusByTier(

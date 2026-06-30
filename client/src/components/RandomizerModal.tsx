@@ -76,11 +76,12 @@ export function RandomizerModal({
   const baseWeights =
     settings?.spinOutcomeWeights ?? DEFAULT_DAILY_SETTINGS.spinOutcomeWeights;
   const pity = tokenData?.pityByTier?.[tokenTier];
-  const effectiveWeights = pity?.effectiveWeights ?? baseWeights;
+  const resolvedBase = pity?.baseWeights ?? baseWeights;
+  const effectiveWeights = pity?.effectiveWeights ?? resolvedBase;
   const oddsSummary = formatSpinOddsSummary(effectiveWeights);
   const oddsTitle =
     pity && pity.consecutiveLosses > 0
-      ? pityTooltip(baseWeights, effectiveWeights, pity.consecutiveLosses)
+      ? pityTooltip(resolvedBase, effectiveWeights, pity.consecutiveLosses)
       : undefined;
 
   const advanceFromReveal = useCallback((data: SpinResult, skipped: boolean) => {
@@ -153,7 +154,7 @@ export function RandomizerModal({
           {pity && (
             <>
               {" "}
-              <SpinPityHint pity={pity} baseWeights={baseWeights} />
+              <SpinPityHint pity={pity} baseWeights={resolvedBase} />
             </>
           )}
         </h2>

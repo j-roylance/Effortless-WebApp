@@ -69,6 +69,7 @@ export interface SpinOutcomeWeights {
 export interface SpinPityStatus {
   consecutiveLosses: number;
   effectiveWeights: SpinOutcomeWeights;
+  baseWeights?: SpinOutcomeWeights;
 }
 
 export interface TokenBalances {

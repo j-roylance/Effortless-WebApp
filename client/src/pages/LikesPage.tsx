@@ -157,6 +157,11 @@ export function LikesPage() {
                 >
                   {tier}
                 </h3>
+                <SpinPityHintForTier
+                  tier={tier}
+                  pityByTier={pityByTier}
+                  baseWeights={baseSpinWeights}
+                />
                 <button
                   type="button"
                   className="icon-btn wheel-edit-btn"
@@ -201,13 +206,6 @@ export function LikesPage() {
                 >
                   Spin ({tokenCount})
                 </button>
-                {tokenCount > 0 && (
-                  <SpinPityHintForTier
-                    tier={tier}
-                    pityByTier={pityByTier}
-                    baseWeights={baseSpinWeights}
-                  />
-                )}
               </div>
             </div>
             <p className="like-freq">{TIER_USABLE_LIFETIME_LABEL[tier]}</p>
@@ -289,7 +287,13 @@ export function LikesPage() {
       })}
 
       {spinTier && (
-        <RandomizerModal tokenTier={spinTier} onClose={() => setSpinTier(null)} />
+        <RandomizerModal
+          tokenTier={spinTier}
+          onClose={() => {
+            setSpinTier(null);
+            void queryClient.invalidateQueries({ queryKey: ["tokens"] });
+          }}
+        />
       )}
 
       {wheelEditTier && (

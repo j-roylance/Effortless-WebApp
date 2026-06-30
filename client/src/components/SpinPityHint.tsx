@@ -11,8 +11,9 @@ export function SpinPityHint({
 }) {
   if (!pity) return null;
 
+  const resolvedBase = pity.baseWeights ?? baseWeights;
   const hint = formatPityWinHint(
-    baseWeights.win,
+    resolvedBase.win,
     pity.effectiveWeights.win,
     pity.consecutiveLosses
   );
@@ -21,7 +22,7 @@ export function SpinPityHint({
   return (
     <span
       className="spin-pity-hint"
-      title={pityTooltip(baseWeights, pity.effectiveWeights, pity.consecutiveLosses)}
+      title={pityTooltip(resolvedBase, pity.effectiveWeights, pity.consecutiveLosses)}
     >
       {hint}
     </span>

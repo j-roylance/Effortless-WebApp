@@ -71,11 +71,11 @@ function AppShellContent() {
         <NavLink to="/likes" className={({ isActive }) => (isActive ? "active" : "")}>
           Likes
         </NavLink>
-        <NavLink to="/daily-settings" className={({ isActive }) => (isActive ? "active" : "")}>
-          Settings
-        </NavLink>
         <NavLink to="/visions" className={({ isActive }) => (isActive ? "active" : "")}>
           Vision
+        </NavLink>
+        <NavLink to="/daily-settings" className={({ isActive }) => (isActive ? "active" : "")}>
+          Settings
         </NavLink>
       </nav>
     </div>

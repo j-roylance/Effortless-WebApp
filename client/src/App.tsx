@@ -3,7 +3,7 @@
  *
  * Guest:     /login, /signup
  * Onboarding /welcome (no tab bar; signup only)
- * Shell:     / Tasks | /calendar | /likes | /daily-settings | /visions
+ * Shell:     / Tasks | /calendar | /likes | /visions | /daily-settings
  *            /tasks/new, /tasks/:id/edit
  *            /visions/new, /visions/:id/edit, /visions/:id/chain, /visions/:id/chain/:goalId
  *            AI chat is a sheet on the vision routes (AiPanel); /ai redirects to /visions?ai=1

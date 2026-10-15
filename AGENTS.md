@@ -2,7 +2,7 @@
 
 ## Product in one sentence
 
-Tasks earn tier tokens; users define likes per tier and spin to win them; visions hold backward goal chains; AI tab builds copy-paste prompts for external assistants.
+Tasks earn tier tokens; users define likes per tier and spin to win them; visions hold backward goal chains; AI tab chats with a configured model (or builds copy-paste prompts when none is set).
 
 ## Naming glossary (user-facing vs code)
 
@@ -27,6 +27,8 @@ Grep hits for `habit` in old token `source` values are expected.
 | Daily bonuses | `server/src/services/daily-rewards.ts` |
 | Vision / goal chain | `server/src/routes/visions.ts`, `goals.ts`, `services/goals.ts` |
 | AI prompt text | `client/src/domain/ai-prompts.ts` |
+| AI model calls | `server/src/services/ai-chat.ts` (OpenAI-compatible streaming), `server/src/routes/ai.ts`, `AI_*` env in `server/src/lib/env.ts` |
+| AI chat UI | `client/src/components/AiChatPanel.tsx`, `AiPage`, `apiStream` in `client/src/api/client.ts` |
 | UI screens | `client/src/pages/` |
 | Shared page chrome | `client/src/components/PageHeader.tsx` |
 | Token earn modals | `useRewardQueue`, `RewardModalHost` |
@@ -51,14 +53,14 @@ Grep hits for `habit` in old token `source` values are expected.
 | `/visions` | VisionsPage | `GET /visions` |
 | `/visions/:id/chain` | VisionChainPage | `GET/POST/PATCH /visions/:id/goals` (top-level goals) |
 | `/visions/:id/chain/:goalId` | VisionChainPage | `GET /visions/:id/goals?focus=:goalId` (sub-goals) |
-| `/ai` | AiPage | (client-only prompts) |
+| `/ai` | AiPage | `GET /ai/status`, `POST /ai/chat` (streams plain text); falls back to client-only prompts when AI is not configured |
 | `/welcome` | WelcomePage | (signup onboarding only) |
 
 `/welcome` is **outside** `AppShell` (no tab bar). FAB `+` shows on `/` (tasks) and `/visions` only.
 
 ## React Query keys
 
-`["tasks"]`, `["tokens"]`, `["likes"]`, `["visions"]`, `["vision-goals", visionId, chainKey]`, `["daily-settings"]`, `["wheel-config", tier]`
+`["tasks"]`, `["tokens"]`, `["likes"]`, `["visions"]`, `["vision-goals", visionId, chainKey]`, `["daily-settings"]`, `["wheel-config", tier]`, `["ai-status"]`
 
 ## Do not commit
 
@@ -79,6 +81,33 @@ When `schema.prisma` changes:
 4. Push to `main` so Vercel build matches the applied schema.
 
 Code-only changes skip step 2–3; push alone triggers redeploy.
+
+### AI chat setup
+
+AI chat is off unless `AI_BASE_URL` and `AI_MODEL` are set (server env / Vercel project env). `AI_API_KEY` is sent as a Bearer token when present. Any OpenAI-compatible `/chat/completions` endpoint works:
+
+| Provider | `AI_BASE_URL` | `AI_MODEL` example | Key |
+|----------|---------------|--------------------|-----|
+| HF Inference Providers | `https://router.huggingface.co/v1` | `Qwen/Qwen2.5-7B-Instruct` | HF token (Inference permission) |
+| Groq | `https://api.groq.com/openai/v1` | `llama-3.1-8b-instant` | Groq key |
+| OpenRouter | `https://openrouter.ai/api/v1` | a `:free` model id | OpenRouter key |
+| Own HF Space (Ollama) | `https://<user>-<space>.hf.space/v1` | `qwen2.5:1.5b` | none (public Space) |
+| Local Ollama | `http://localhost:11434/v1` | `qwen2.5:1.5b` | none |
+
+Minimal self-hosted HF Space: create a **Docker** Space with `app_port: 11434` in its README front matter and a Dockerfile like:
+
+```dockerfile
+FROM ollama/ollama
+# HF runs Docker Spaces as uid 1000, so models and HOME must not live under /root.
+ENV OLLAMA_HOST=0.0.0.0:11434 OLLAMA_MODELS=/models HOME=/tmp
+RUN mkdir -p /models && (ollama serve &) && sleep 5 && ollama pull qwen2.5:1.5b \
+  && chmod -R a+rwX /models
+ENTRYPOINT ["ollama", "serve"]
+```
+
+(Starting-point recipe; not exercised by this repo's tests.)
+
+Free CPU Spaces are slow (10–60s replies) and sleep when idle; the first request after sleep may fail with "Model is waking up". Vercel `maxDuration` for `api/index.ts` is 60s, so keep models small.
 
 ## Common pitfalls
 

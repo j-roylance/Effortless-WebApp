@@ -17,4 +17,10 @@ export const env = {
   port: Number(process.env.PORT ?? 4000),
   jwtSecret: required("JWT_SECRET"),
   clientUrl: resolveClientUrl(),
+  /** Optional OpenAI-compatible chat endpoint; AI chat is disabled unless baseUrl and model are set. */
+  ai: {
+    baseUrl: process.env.AI_BASE_URL?.replace(/\/+$/, "") || null,
+    apiKey: process.env.AI_API_KEY || null,
+    model: process.env.AI_MODEL || null,
+  },
 };

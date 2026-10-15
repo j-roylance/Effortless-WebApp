@@ -1,6 +1,14 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
+import { AiChatPanel, loadAiChat, startAiChat } from "../components/AiChatPanel";
 import { buildGoalBreakdownPrompt, buildVisionBreakdownPrompt } from "../domain/ai-prompts";
+
+interface AiStatus {
+  enabled: boolean;
+  model: string | null;
+}
 
 function PromptOutput({
   prompt,
@@ -35,10 +43,9 @@ function BreakdownSection({
   secondaryLabel,
   secondaryPlaceholder,
   generateLabel,
-  onGenerate,
-  prompt,
-  copied,
-  onCopy,
+  introLabel,
+  buildPrompt,
+  aiEnabled,
 }: {
   sectionId: string;
   title: string;
@@ -48,66 +55,33 @@ function BreakdownSection({
   secondaryLabel: string;
   secondaryPlaceholder: string;
   generateLabel: string;
-  onGenerate: (primary: string, secondary: string) => void;
-  prompt: string | null;
-  copied: boolean;
-  onCopy: () => void;
+  introLabel: string;
+  buildPrompt: (primary: string, secondary: string) => string;
+  aiEnabled: boolean;
 }) {
   const [primary, setPrimary] = useState("");
   const [secondary, setSecondary] = useState("");
+  const [prompt, setPrompt] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [chatOpen, setChatOpen] = useState(() => loadAiChat(sectionId).length > 0);
+  const [chatSession, setChatSession] = useState(0);
 
-  return (
-    <section className="ai-section neon-card">
-      <h3 className="ai-section-title">{title}</h3>
-      <p className="ai-section-desc">{description}</p>
+  function generatePrompt() {
+    setPrompt(buildPrompt(primary, secondary));
+    setCopied(false);
+  }
 
-      <div className="form-field">
-        <label htmlFor={`${sectionId}-primary`}>{primaryLabel}</label>
-        <textarea
-          id={`${sectionId}-primary`}
-          className="neon-textarea"
-          rows={5}
-          value={primary}
-          placeholder={primaryPlaceholder}
-          onChange={(e) => setPrimary(e.target.value)}
-        />
-      </div>
+  function startChat() {
+    startAiChat(sectionId, buildPrompt(primary, secondary));
+    setPrompt(null);
+    setChatSession((n) => n + 1);
+    setChatOpen(true);
+  }
 
-      <div className="form-field">
-        <label htmlFor={`${sectionId}-secondary`}>{secondaryLabel}</label>
-        <textarea
-          id={`${sectionId}-secondary`}
-          className="neon-textarea"
-          rows={4}
-          value={secondary}
-          placeholder={secondaryPlaceholder}
-          onChange={(e) => setSecondary(e.target.value)}
-        />
-      </div>
-
-      <button
-        type="button"
-        className="neon-btn neon-btn-primary"
-        style={{ width: "100%" }}
-        onClick={() => onGenerate(primary, secondary)}
-      >
-        {generateLabel}
-      </button>
-
-      <PromptOutput prompt={prompt} onCopy={onCopy} copied={copied} />
-    </section>
-  );
-}
-
-export function AiPage() {
-  const [visionPrompt, setVisionPrompt] = useState<string | null>(null);
-  const [goalPrompt, setGoalPrompt] = useState<string | null>(null);
-  const [visionCopied, setVisionCopied] = useState(false);
-  const [goalCopied, setGoalCopied] = useState(false);
-
-  async function copyText(text: string, setCopied: (v: boolean) => void) {
+  async function copyPrompt() {
+    if (!prompt) return;
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(prompt);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -115,12 +89,94 @@ export function AiPage() {
     }
   }
 
+  const showChat = aiEnabled && chatOpen;
+
+  return (
+    <section className="ai-section neon-card">
+      <h3 className="ai-section-title">{title}</h3>
+      <p className="ai-section-desc">{description}</p>
+
+      {showChat ? (
+        <AiChatPanel
+          key={chatSession}
+          storageKey={sectionId}
+          introLabel={introLabel}
+          onClose={() => setChatOpen(false)}
+        />
+      ) : (
+        <>
+          <div className="form-field">
+            <label htmlFor={`${sectionId}-primary`}>{primaryLabel}</label>
+            <textarea
+              id={`${sectionId}-primary`}
+              className="neon-textarea"
+              rows={5}
+              value={primary}
+              placeholder={primaryPlaceholder}
+              onChange={(e) => setPrimary(e.target.value)}
+            />
+          </div>
+
+          <div className="form-field">
+            <label htmlFor={`${sectionId}-secondary`}>{secondaryLabel}</label>
+            <textarea
+              id={`${sectionId}-secondary`}
+              className="neon-textarea"
+              rows={4}
+              value={secondary}
+              placeholder={secondaryPlaceholder}
+              onChange={(e) => setSecondary(e.target.value)}
+            />
+          </div>
+
+          {aiEnabled ? (
+            <div className="ai-section-actions">
+              <button
+                type="button"
+                className="neon-btn neon-btn-primary"
+                onClick={startChat}
+                disabled={!primary.trim()}
+              >
+                Start chat
+              </button>
+              <button type="button" className="neon-btn" onClick={generatePrompt}>
+                Copy prompt instead
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="neon-btn neon-btn-primary"
+              style={{ width: "100%" }}
+              onClick={generatePrompt}
+            >
+              {generateLabel}
+            </button>
+          )}
+
+          <PromptOutput prompt={prompt} onCopy={copyPrompt} copied={copied} />
+        </>
+      )}
+    </section>
+  );
+}
+
+export function AiPage() {
+  const { data: status } = useQuery({
+    queryKey: ["ai-status"],
+    queryFn: () => api<AiStatus>("/ai/status"),
+    staleTime: 5 * 60 * 1000,
+  });
+  const aiEnabled = status?.enabled ?? false;
+
   return (
     <>
       <PageHeader title="AI" />
 
       <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", marginTop: 0 }}>
-        Fill in your answers, generate a prompt, and paste it into your favorite AI assistant.
+        {aiEnabled
+          ? "Fill in your answers and start a chat, or copy the prompt into your favorite AI assistant."
+          : "Fill in your answers, generate a prompt, and paste it into your favorite AI assistant."}
       </p>
 
       <div className="ai-sections">
@@ -133,13 +189,9 @@ export function AiPage() {
           secondaryLabel="What you have done so far"
           secondaryPlaceholder="Everything you have already done toward this vision…"
           generateLabel="Generate vision prompt"
-          onGenerate={(vision, progress) => {
-            setVisionPrompt(buildVisionBreakdownPrompt(vision, progress));
-            setVisionCopied(false);
-          }}
-          prompt={visionPrompt}
-          copied={visionCopied}
-          onCopy={() => visionPrompt && copyText(visionPrompt, setVisionCopied)}
+          introLabel="Your vision and progress"
+          buildPrompt={buildVisionBreakdownPrompt}
+          aiEnabled={aiEnabled}
         />
 
         <BreakdownSection
@@ -151,13 +203,9 @@ export function AiPage() {
           secondaryLabel="What you have done so far"
           secondaryPlaceholder="Everything you have already done toward this goal…"
           generateLabel="Generate goal prompt"
-          onGenerate={(goal, progress) => {
-            setGoalPrompt(buildGoalBreakdownPrompt(goal, progress));
-            setGoalCopied(false);
-          }}
-          prompt={goalPrompt}
-          copied={goalCopied}
-          onCopy={() => goalPrompt && copyText(goalPrompt, setGoalCopied)}
+          introLabel="Your goal and progress"
+          buildPrompt={buildGoalBreakdownPrompt}
+          aiEnabled={aiEnabled}
         />
       </div>
     </>

@@ -15,6 +15,7 @@ import { wheelConfigRouter } from "./routes/wheel-config.js";
 import { dailySettingsRouter } from "./routes/daily-settings.js";
 import { visionsRouter } from "./routes/visions.js";
 import { accountBackupRouter } from "./routes/account-backup.js";
+import { aiRouter } from "./routes/ai.js";
 
 export const app = express();
 
@@ -40,3 +41,4 @@ app.use("/api/wheel-config", wheelConfigRouter);
 app.use("/api/daily-settings", dailySettingsRouter);
 app.use("/api/visions", visionsRouter);
 app.use("/api/account/backup", accountBackupRouter);
+app.use("/api/ai", aiRouter);

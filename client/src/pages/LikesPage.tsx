@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { LikesResponse, UserLike } from "../api/types";
@@ -38,6 +38,9 @@ export function LikesPage() {
   const [splitLike, setSplitLike] = useState<UserLike | null>(null);
   const [combineTier, setCombineTier] = useState<RewardTier | null>(null);
   const [adjustTier, setAdjustTier] = useState<RewardTier | null>(null);
+  const [editingLikeId, setEditingLikeId] = useState<string | null>(null);
+  const [editingLabel, setEditingLabel] = useState("");
+  const renameActiveRef = useRef(false);
 
   const {
     data: likesData,
@@ -80,6 +83,45 @@ export function LikesPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["likes"] }),
     onError: (err: Error) => setToast(err.message),
   });
+
+  const renameMutation = useMutation({
+    mutationFn: ({ likeId, label }: { likeId: string; label: string }) =>
+      api(`/likes/${likeId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ label }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["likes"] });
+      setEditingLikeId(null);
+    },
+    onError: (err: Error) => {
+      renameActiveRef.current = true;
+      setToast(err.message);
+    },
+  });
+
+  function startRename(like: UserLike) {
+    renameActiveRef.current = true;
+    setEditingLikeId(like.id);
+    setEditingLabel(like.label);
+  }
+
+  function cancelRename() {
+    renameActiveRef.current = false;
+    setEditingLikeId(null);
+  }
+
+  function commitRename(like: UserLike) {
+    // Blur also fires when the input is disabled or removed, so only commit once.
+    if (!renameActiveRef.current) return;
+    renameActiveRef.current = false;
+    const label = editingLabel.trim();
+    if (!label || label === like.label) {
+      setEditingLikeId(null);
+      return;
+    }
+    renameMutation.mutate({ likeId: like.id, label });
+  }
 
   const usedMutation = useMutation({
     mutationFn: ({ likeId, delta }: { likeId: string; delta: 1 | -1 }) =>
@@ -218,7 +260,46 @@ export function LikesPage() {
             <ul className="like-list">
               {tierLikes.map((item) => (
                 <li key={item.id} className="like-item">
-                  <span className="like-item-label">{item.label}</span>
+                  {editingLikeId === item.id ? (
+                    <input
+                      className="neon-input like-item-label-input"
+                      aria-label={`Rename ${item.label}`}
+                      value={editingLabel}
+                      maxLength={500}
+                      autoFocus
+                      disabled={renameMutation.isPending}
+                      onChange={(e) => setEditingLabel(e.target.value)}
+                      onBlur={() => commitRename(item)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          commitRename(item);
+                        } else if (e.key === "Escape") {
+                          cancelRename();
+                        }
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="like-item-label like-item-label-btn"
+                        title="Click to rename"
+                        onClick={() => startRename(item)}
+                      >
+                        {item.label}
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-btn like-rename-btn"
+                        aria-label={`Rename ${item.label}`}
+                        title="Rename"
+                        onClick={() => startRename(item)}
+                      >
+                        ✎
+                      </button>
+                    </>
+                  )}
                   <LikeUsageStepper
                     usedCount={item.usedCount}
                     availableCount={item.availableCount}

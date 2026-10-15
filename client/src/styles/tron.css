@@ -848,6 +848,38 @@ h3,
   font-size: 0.95rem;
 }
 
+.like-item-label-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+}
+
+.like-rename-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.like-item-label-btn:hover,
+.like-item-label-btn:focus-visible {
+  border-bottom-color: var(--text-dim);
+  outline: none;
+}
+
+.like-item-label-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.95rem;
+}
+
 .like-usage {
   display: flex;
   align-items: center;

@@ -167,7 +167,7 @@ likesRouter.patch("/:id/used", async (req: AuthedRequest, res) => {
 
 likesRouter.patch("/:id", async (req: AuthedRequest, res) => {
   try {
-    const body = z.object({ label: z.string().min(1).max(500) }).parse(req.body);
+    const body = z.object({ label: z.string().trim().min(1).max(500) }).parse(req.body);
     const likeId = String(req.params.id);
     const existing = await prisma.userReward.findFirst({
       where: { id: likeId, userId: req.user!.userId },

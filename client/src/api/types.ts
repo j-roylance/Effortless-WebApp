@@ -151,6 +151,8 @@ export interface AiChatSummary {
   id: string;
   kind: AiChatKind;
   title: string;
+  visionId: string | null;
+  goalId: string | null;
   createdAt: string;
   updatedAt: string;
 }

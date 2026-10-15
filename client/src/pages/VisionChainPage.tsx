@@ -2,7 +2,9 @@ import { useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { Goal, VisionWithGoals } from "../api/types";
+import type { Goal } from "../api/types";
+import { visionChainQuery } from "../api/vision-chain";
+import { useAiPanel } from "../components/AiPanel";
 import { GoalChainNode } from "../components/GoalChainNode";
 import { PageHeader } from "../components/PageHeader";
 import { QueryErrorBanner } from "../components/QueryErrorBanner";
@@ -11,7 +13,6 @@ import { Toast } from "../components/Toast";
 export function VisionChainPage() {
   const { id, goalId } = useParams();
   const visionId = id!;
-  const chainKey = goalId ?? "root";
   const queryClient = useQueryClient();
   const chainEndRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -20,14 +21,10 @@ export function VisionChainPage() {
     "toggle" | "save" | "delete" | "addBefore" | null
   >(null);
 
+  const { openPanel } = useAiPanel();
+
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["vision-goals", visionId, chainKey],
-    queryFn: () =>
-      api<VisionWithGoals>(
-        goalId
-          ? `/visions/${visionId}/goals?focus=${encodeURIComponent(goalId)}`
-          : `/visions/${visionId}/goals`
-      ),
+    ...visionChainQuery(visionId, goalId ?? null),
     enabled: !!visionId && visionId !== "new",
   });
 
@@ -142,9 +139,14 @@ export function VisionChainPage() {
       <PageHeader
         title="Vision Chain"
         action={
-          <Link to={backPath()} className="neon-btn neon-btn-sm">
-            Back
-          </Link>
+          <div className="page-header-actions">
+            <button type="button" className="neon-btn neon-btn-sm" onClick={openPanel}>
+              AI
+            </button>
+            <Link to={backPath()} className="neon-btn neon-btn-sm">
+              Back
+            </Link>
+          </div>
         }
       />
 

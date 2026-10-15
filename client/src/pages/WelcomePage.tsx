@@ -10,7 +10,7 @@ export function WelcomePage() {
         <button
           type="button"
           className="welcome-page-begin neon-btn neon-btn-primary"
-          onClick={() => navigate("/ai")}
+          onClick={() => navigate("/visions?ai=1")}
         >
           Click to begin
         </button>

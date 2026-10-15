@@ -2,7 +2,7 @@
 
 ## Product in one sentence
 
-Tasks earn tier tokens; users define likes per tier and spin to win them; visions hold backward goal chains; AI tab chats with a configured model (or builds copy-paste prompts when none is set).
+Tasks earn tier tokens; users define likes per tier and spin to win them; visions hold backward goal chains; an AI sheet on the vision pages chats with a configured model and turns the chat into visions/goals (or builds copy-paste prompts when none is set).
 
 ## Naming glossary (user-facing vs code)
 
@@ -27,9 +27,9 @@ Grep hits for `habit` in old token `source` values are expected.
 | Daily bonuses | `server/src/services/daily-rewards.ts` |
 | Vision / goal chain | `server/src/routes/visions.ts`, `goals.ts`, `services/goals.ts` |
 | AI prompt text | `client/src/domain/ai-prompts.ts` |
-| AI model calls | `server/src/services/ai-chat.ts` (OpenAI-compatible streaming), `server/src/routes/ai.ts`, `AI_*` env in `server/src/lib/env.ts` |
-| AI chat UI | `client/src/components/AiChatPanel.tsx`, `AiPage`, `apiStream` in `client/src/api/client.ts` |
-| Saved AI chats | `AiChat` model (`kind` vision/goal, `messages` JSON), `/ai/chats` CRUD in `server/src/routes/ai.ts`; revert = PATCH with truncated `messages` |
+| AI model calls | `server/src/services/ai-chat.ts` (OpenAI-compatible streaming + `completeChat`/`parseList` for structured asks), `server/src/routes/ai.ts`, `AI_*` env in `server/src/lib/env.ts` |
+| AI sheet (vision routes) | `AiPanel.tsx` (`AiPanelProvider`/`useAiPanel` in `AppShell`; target derived from route), `AiChatPanel.tsx` (chat + Add Vision / Add Goal / Save whole chain), `AiChainTools.tsx` (`NameConfirmBox`, `ChainChecklist`), `api/vision-chain.ts` |
+| Saved AI chats | `AiChat` model (`kind` vision/goal, `messages` JSON, optional `visionId`/`goalId` link), `/ai/chats` CRUD in `server/src/routes/ai.ts`; revert = PATCH with truncated `messages` |
 | UI screens | `client/src/pages/` |
 | Shared page chrome | `client/src/components/PageHeader.tsx` |
 | Token earn modals | `useRewardQueue`, `RewardModalHost` |
@@ -54,14 +54,16 @@ Grep hits for `habit` in old token `source` values are expected.
 | `/visions` | VisionsPage | `GET /visions` |
 | `/visions/:id/chain` | VisionChainPage | `GET/POST/PATCH /visions/:id/goals` (top-level goals) |
 | `/visions/:id/chain/:goalId` | VisionChainPage | `GET /visions/:id/goals?focus=:goalId` (sub-goals) |
-| `/ai` | AiPage | `GET /ai/status`, `POST /ai/chat` (streams plain text), `GET/POST /ai/chats`, `GET/PATCH/DELETE /ai/chats/:id`; falls back to client-only prompts when AI is not configured |
+| `/ai` | redirect | → `/visions?ai=1` (opens the AI sheet) |
 | `/welcome` | WelcomePage | (signup onboarding only) |
 
-`/welcome` is **outside** `AppShell` (no tab bar). FAB `+` shows on `/` (tasks) and `/visions` only.
+`/welcome` is **outside** `AppShell` (no tab bar). FAB `+` shows on `/` (tasks) and `/visions` only (hidden while the AI sheet is open).
+
+AI sheet (on `/visions` and chain pages; "Plan with AI" / "AI" header buttons) uses: `GET /ai/status`, `POST /ai/chat` (streams plain text), `GET /ai/chats?visionId=|goalId=|unlinked=1`, `POST /ai/chats`, `GET/PATCH/DELETE /ai/chats/:id`, `POST /ai/suggest-name` → `{ name }`, `POST /ai/extract-chain` → `{ goals }`, `POST /ai/draft-chain` → `{ name, goals }` (goals ordered closest-to-vision first, appended in that order). Falls back to client-only prompts when AI is not configured.
 
 ## React Query keys
 
-`["tasks"]`, `["tokens"]`, `["likes"]`, `["visions"]`, `["vision-goals", visionId, chainKey]`, `["daily-settings"]`, `["wheel-config", tier]`, `["ai-status"]`, `["ai-chats", kind]`, `["ai-chat", id]`
+`["tasks"]`, `["tokens"]`, `["likes"]`, `["visions"]`, `["vision-goals", visionId, chainKey]`, `["daily-settings"]`, `["wheel-config", tier]`, `["ai-status"]`, `["ai-chats", "unlinked" | "vision:<id>" | "goal:<id>"]`, `["ai-chat", id]`
 
 ## Do not commit
 

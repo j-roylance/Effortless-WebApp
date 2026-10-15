@@ -1,15 +1,26 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { AiPanel, AiPanelProvider, targetFromPath, useAiPanel } from "./AiPanel";
 
-/** Main chrome: header, bottom tabs, FAB on task and vision list routes only. */
+/** Main chrome: header, bottom tabs, FAB on task and vision list routes only, AI sheet on vision routes. */
 export function AppShell() {
+  return (
+    <AiPanelProvider>
+      <AppShellContent />
+    </AiPanelProvider>
+  );
+}
+
+function AppShellContent() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const { open: aiOpen } = useAiPanel();
   const isTasksList = location.pathname === "/";
   const isVisionsList = location.pathname === "/visions";
+  const aiSheetShown = aiOpen && targetFromPath(location.pathname) !== null;
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${aiSheetShown ? " app-shell--ai-open" : ""}`}>
       <header
         style={{
           padding: "1rem",
@@ -48,7 +59,9 @@ export function AppShell() {
         </NavLink>
       )}
 
-      <nav className="tab-bar tab-bar--six">
+      <AiPanel />
+
+      <nav className="tab-bar tab-bar--five">
         <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
           Tasks
         </NavLink>
@@ -63,9 +76,6 @@ export function AppShell() {
         </NavLink>
         <NavLink to="/visions" className={({ isActive }) => (isActive ? "active" : "")}>
           Vision
-        </NavLink>
-        <NavLink to="/ai" className={({ isActive }) => (isActive ? "active" : "")}>
-          AI
         </NavLink>
       </nav>
     </div>

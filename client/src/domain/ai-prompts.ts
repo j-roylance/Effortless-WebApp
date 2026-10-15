@@ -1,4 +1,14 @@
-export function buildVisionBreakdownPrompt(vision: string, progressSoFar: string): string {
+function existingGoalsSection(existingGoals: string[], heading: string): string {
+  if (existingGoals.length === 0) return "";
+  const list = existingGoals.map((goal, i) => `${i + 1}. ${goal}`).join("\n");
+  return `\n## ${heading}\nListed from the step right before it down to the earliest step. Build on these instead of repeating them.\n${list}\n`;
+}
+
+export function buildVisionBreakdownPrompt(
+  vision: string,
+  progressSoFar: string,
+  existingGoals: string[] = []
+): string {
   const visionText = vision.trim() || "(not provided)";
   const progressText = progressSoFar.trim() || "(nothing noted yet)";
 
@@ -9,7 +19,7 @@ ${visionText}
 
 ## What I have done toward this vision so far
 ${progressText}
-
+${existingGoalsSection(existingGoals, "Goals already in my chain")}
 ## Your task
 Work with me in a back-and-forth dialogue. Start from my vision above and work **backward**, step by step:
 
@@ -22,7 +32,11 @@ Work with me in a back-and-forth dialogue. Start from my vision above and work *
 Present goals one at a time in dialogue. Confirm each step with me before moving to the earlier goal. When we reach the first achievable goal, summarize the full chain from that first goal up to the vision.`;
 }
 
-export function buildGoalBreakdownPrompt(goal: string, progressSoFar: string): string {
+export function buildGoalBreakdownPrompt(
+  goal: string,
+  progressSoFar: string,
+  existingGoals: string[] = []
+): string {
   const goalText = goal.trim() || "(not provided)";
   const progressText = progressSoFar.trim() || "(nothing noted yet)";
 
@@ -33,7 +47,7 @@ ${goalText}
 
 ## What I have done toward this goal so far
 ${progressText}
-
+${existingGoalsSection(existingGoals, "Sub-goals already listed")}
 ## Your task
 Work with me in a back-and-forth dialogue. Start from the big goal above and work **backward**:
 

@@ -3,9 +3,10 @@
  *
  * Guest:     /login, /signup
  * Onboarding /welcome (no tab bar; signup only)
- * Shell:     / Tasks | /calendar | /likes | /daily-settings | /visions | /ai
+ * Shell:     / Tasks | /calendar | /likes | /daily-settings | /visions
  *            /tasks/new, /tasks/:id/edit
  *            /visions/new, /visions/:id/edit, /visions/:id/chain, /visions/:id/chain/:goalId
+ *            AI chat is a sheet on the vision routes (AiPanel); /ai redirects to /visions?ai=1
  */
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
@@ -22,7 +23,6 @@ import { DailySettingsPage } from "./pages/DailySettingsPage";
 import { VisionsPage } from "./pages/VisionsPage";
 import { VisionFormPage } from "./pages/VisionFormPage";
 import { VisionChainPage } from "./pages/VisionChainPage";
-import { AiPage } from "./pages/AiPage";
 import { WelcomePage } from "./pages/WelcomePage";
 
 export default function App() {
@@ -49,7 +49,7 @@ export default function App() {
               <Route path="/visions/:id/edit" element={<VisionFormPage />} />
               <Route path="/visions/:id/chain" element={<VisionChainPage />} />
               <Route path="/visions/:id/chain/:goalId" element={<VisionChainPage />} />
-              <Route path="/ai" element={<AiPage />} />
+              <Route path="/ai" element={<Navigate to="/visions?ai=1" replace />} />
             </Route>
           </Route>
 

@@ -183,6 +183,8 @@ export async function exportAccountBackup(
         kind: row.kind,
         title: row.title,
         messages: row.messages,
+        visionId: row.visionId,
+        goalId: row.goalId,
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
       })),
@@ -504,6 +506,8 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
     }
 
     if (data.aiChats.length > 0) {
+      const visionIds = new Set(data.visions.map((v) => v.id));
+      const goalIds = new Set(data.goals.map((g) => g.id));
       await tx.aiChat.createMany({
         data: data.aiChats.map((row) => ({
           id: row.id,
@@ -511,6 +515,8 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           kind: row.kind,
           title: row.title,
           messages: row.messages as Prisma.InputJsonValue,
+          visionId: row.visionId && visionIds.has(row.visionId) ? row.visionId : null,
+          goalId: row.goalId && goalIds.has(row.goalId) ? row.goalId : null,
           createdAt: parseRequiredDate(row.createdAt, "aiChat.createdAt"),
           updatedAt: parseRequiredDate(row.updatedAt, "aiChat.updatedAt"),
         })),

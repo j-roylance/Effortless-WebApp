@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiStream } from "../api/client";
 import type { AiChat, AiChatMessage } from "../api/types";
+import { appendGoals, createVision, visionChainQuery } from "../api/vision-chain";
+import { ChainChecklist, NameConfirmBox } from "./AiChainTools";
 
 const MAX_MESSAGES_PER_REQUEST = 40;
 
@@ -128,7 +131,15 @@ function AiChatConversation({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<AiChatMessage[]>(chat.messages);
+  const [action, setAction] = useState<"addVision" | "addGoal" | "saveChain" | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const { data: chain } = useQuery({
+    ...visionChainQuery(chat.visionId ?? "", chat.goalId),
+    enabled: !!chat.visionId,
+  });
+  const existingGoalNames = (chain?.goals ?? []).map((g) => g.name);
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -271,6 +282,57 @@ function AiChatConversation({
     }
   }
 
+  function suggestName(target: "vision" | "goal"): Promise<string> {
+    return api<{ name: string }>("/ai/suggest-name", {
+      method: "POST",
+      body: JSON.stringify({ messages: trimForRequest(messages), target }),
+    }).then((r) => r.name);
+  }
+
+  /** Creates the vision, links this chat to it, and moves to its chain page (the panel follows). */
+  async function createVisionForChat(name: string): Promise<string> {
+    const vision = await createVision(name);
+    await api(`/ai/chats/${chat.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ visionId: vision.id, goalId: null }),
+    });
+    updateCachedChat({ visionId: vision.id, goalId: null });
+    void queryClient.invalidateQueries({ queryKey: ["visions"] });
+    void queryClient.invalidateQueries({ queryKey: ["ai-chats"] });
+    navigate(`/visions/${vision.id}/chain`);
+    return vision.id;
+  }
+
+  async function addGoalsToChain(visionId: string, names: string[]) {
+    await appendGoals(visionId, chat.goalId, names);
+    void queryClient.invalidateQueries({ queryKey: ["vision-goals", visionId] });
+  }
+
+  async function saveVision(name: string) {
+    await createVisionForChat(name);
+    setAction(null);
+    setNotice(`Created vision "${name}". Keep chatting and use Add Goal for each step.`);
+  }
+
+  async function saveGoal(name: string) {
+    await addGoalsToChain(chat.visionId!, [name]);
+    setAction(null);
+    setNotice(`Added "${name}" to the chain.`);
+  }
+
+  async function saveChain(name: string | null, goals: string[]) {
+    const visionId = chat.visionId ?? (await createVisionForChat(name!));
+    await addGoalsToChain(visionId, goals);
+    setAction(null);
+    setNotice(`Added ${goals.length} goal${goals.length === 1 ? "" : "s"} to the chain.`);
+  }
+
+  function openAction(next: "addVision" | "addGoal" | "saveChain") {
+    setNotice(null);
+    setAction(next);
+  }
+
+  const actionsDisabled = isStreaming || messages.length < 2;
   const [intro, ...turns] = messages;
 
   return (
@@ -278,7 +340,7 @@ function AiChatConversation({
       <div className="ai-chat-header">
         <EditableTitle title={chat.title} onSave={renameChat} />
         <button type="button" className="neon-btn neon-btn-sm" onClick={onClose}>
-          Close
+          All chats
         </button>
       </div>
 
@@ -336,6 +398,64 @@ function AiChatConversation({
       </div>
 
       {saveError && <div className="ai-chat-error">Not saved: {saveError}</div>}
+
+      {action === null ? (
+        <div className="ai-chat-actions">
+          {chat.visionId ? (
+            <button
+              type="button"
+              className="neon-btn neon-btn-sm"
+              disabled={actionsDisabled}
+              onClick={() => openAction("addGoal")}
+            >
+              Add Goal
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="neon-btn neon-btn-sm"
+              disabled={actionsDisabled}
+              onClick={() => openAction("addVision")}
+            >
+              Add Vision
+            </button>
+          )}
+          <button
+            type="button"
+            className="neon-btn neon-btn-sm"
+            disabled={actionsDisabled}
+            onClick={() => openAction("saveChain")}
+          >
+            Save whole chain
+          </button>
+        </div>
+      ) : action === "saveChain" ? (
+        <ChainChecklist
+          title="Save whole chain"
+          existingNames={existingGoalNames}
+          nameLabel={chat.visionId ? undefined : "Vision name"}
+          load={async () => {
+            const body = JSON.stringify({ messages: trimForRequest(messages) });
+            const [extracted, name] = await Promise.all([
+              api<{ goals: string[] }>("/ai/extract-chain", { method: "POST", body }),
+              chat.visionId ? Promise.resolve(null) : suggestName("vision").catch(() => ""),
+            ]);
+            return { name, goals: extracted.goals };
+          }}
+          onSave={saveChain}
+          onCancel={() => setAction(null)}
+        />
+      ) : (
+        <NameConfirmBox
+          key={action}
+          label={action === "addVision" ? "New vision" : "New goal (added to the end of the chain)"}
+          loadSuggestion={() => suggestName(action === "addVision" ? "vision" : "goal")}
+          onSave={action === "addVision" ? saveVision : saveGoal}
+          onCancel={() => setAction(null)}
+        />
+      )}
+
+      {notice && <div className="ai-chat-notice">{notice}</div>}
 
       <div className="ai-chat-input-row">
         <textarea

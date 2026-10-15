@@ -32,7 +32,7 @@ GLOSSARY (UI name → data key → DB model)
 - Like split/combine ledger → data.likeCreditLedger → LikeCreditLedger
 - Like credits (usable instances) → data.likeCredits → LikeCredit
 - Daily bonus claims → data.dailyBonusClaims → DailyBonusClaim
-- AI tab saved chats → data.aiChats → AiChat (kind: "vision"|"goal"; messages: [{ role, content }]; optional, may be absent in older files)
+- AI saved chats → data.aiChats → AiChat (kind: "vision"|"goal"; messages: [{ role, content }]; optional visionId/goalId link to the chain; optional, may be absent in older files)
 
 TASK REWARDS
 - Legacy single reward: rewardKind, tier, rewardLikeId, customRewardLabel on each task
@@ -88,6 +88,8 @@ export interface ExportedAiChat {
   kind: string;
   title: string;
   messages: unknown;
+  visionId?: string | null;
+  goalId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

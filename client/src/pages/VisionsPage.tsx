@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Vision } from "../api/types";
+import { useAiPanel } from "../components/AiPanel";
 import { PageHeader } from "../components/PageHeader";
 import { QueryErrorBanner } from "../components/QueryErrorBanner";
 import { Toast } from "../components/Toast";
@@ -36,6 +38,15 @@ export function VisionsPage() {
     onUp: (e: globalThis.PointerEvent) => void;
   } | null>(null);
   const suppressNavigationRef = useRef(false);
+  const { openPanel, setChatId } = useAiPanel();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get("ai") !== "1") return;
+    setChatId(null);
+    openPanel();
+    setSearchParams({}, { replace: true });
+  }, [searchParams]);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["visions"],
@@ -126,7 +137,14 @@ export function VisionsPage() {
 
   return (
     <>
-      <PageHeader title="Vision" />
+      <PageHeader
+        title="Vision"
+        action={
+          <button type="button" className="neon-btn neon-btn-sm" onClick={openPanel}>
+            Plan with AI
+          </button>
+        }
+      />
 
       <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", marginTop: 0 }}>
         Life visions and the goal chains that lead to them.

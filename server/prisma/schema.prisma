@@ -240,18 +240,24 @@ model TierWheelConfig {
   @@index([userId])
 }
 
-/// Saved AI tab conversation. kind: "vision" | "goal"; messages: [{ role: "user" | "assistant", content }].
+/// Saved AI conversation. kind: "vision" | "goal"; messages: [{ role: "user" | "assistant", content }].
+/// visionId / goalId link the chat to the chain it is building (null until "Add Vision").
 model AiChat {
   id        String   @id @default(cuid())
   userId    String
   kind      String
   title     String
   messages  Json
+  visionId  String?
+  goalId    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vision    Vision?  @relation(fields: [visionId], references: [id], onDelete: Cascade)
+  goal      Goal?    @relation(fields: [goalId], references: [id], onDelete: Cascade)
 
   @@index([userId, updatedAt])
+  @@index([userId, visionId])
 }
 
 model Vision {
@@ -263,6 +269,7 @@ model Vision {
   createdAt  DateTime  @default(now())
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   goals      Goal[]
+  aiChats    AiChat[]
 
   @@index([userId])
 }
@@ -280,6 +287,7 @@ model Goal {
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   parentGoal   Goal?     @relation("GoalSubgoals", fields: [parentGoalId], references: [id], onDelete: Cascade)
   subGoals     Goal[]    @relation("GoalSubgoals")
+  aiChats      AiChat[]
 
   @@index([visionId])
   @@index([userId])

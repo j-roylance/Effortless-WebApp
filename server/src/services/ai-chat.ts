@@ -46,38 +46,30 @@ async function readErrorDetail(res: Response): Promise<string> {
   }
 }
 
-/** Calls onToken for each streamed content delta. Throws AiChatError if the request fails before or during streaming. */
-export async function streamChatCompletion(
-  messages: ChatMessage[],
-  onToken: (token: string) => void,
+/** Returns null only when the caller's own signal aborted the request. */
+async function postCompletion(
+  body: Record<string, unknown>,
+  timeout: AbortSignal,
   signal?: AbortSignal
-): Promise<void> {
+): Promise<Response | null> {
   if (!isAiConfigured()) throw new AiChatError("AI not configured", 503);
 
-  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
-
   let res: Response;
   try {
     res = await fetch(`${env.ai.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Accept: "text/event-stream",
+        Accept: body.stream ? "text/event-stream" : "application/json",
         ...(env.ai.apiKey && { Authorization: `Bearer ${env.ai.apiKey}` }),
       },
-      body: JSON.stringify({
-        model: env.ai.model,
-        messages,
-        stream: true,
-        max_tokens: MAX_TOKENS,
-        temperature: 0.7,
-      }),
+      body: JSON.stringify({ model: env.ai.model, ...body }),
       signal: combined,
     });
   } catch (err) {
     if (timeout.aborted) throw new AiChatError("Model took too long to respond; try again", 504);
-    if (signal?.aborted) return;
+    if (signal?.aborted) return null;
     throw new AiChatError(`Could not reach AI provider: ${(err as Error).message}`, 502);
   }
 
@@ -85,8 +77,80 @@ export async function streamChatCompletion(
     const detail = await readErrorDetail(res);
     throw new AiChatError(friendlyUpstreamError(res.status, detail), 502);
   }
+  return res;
+}
 
-  const reader = res.body.getReader();
+/** Reasoning models (e.g. Qwen3) may prefix replies with a <think> block. */
+export function stripThinking(text: string): string {
+  return text.replace(/<think>[\s\S]*?(<\/think>|$)/gi, "").trim();
+}
+
+/** Single non-streamed reply, used for short structured asks like naming a goal. */
+export async function completeChat(
+  messages: ChatMessage[],
+  { maxTokens = 400, temperature = 0.3 }: { maxTokens?: number; temperature?: number } = {}
+): Promise<string> {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const res = await postCompletion(
+    { messages, stream: false, max_tokens: maxTokens, temperature },
+    timeout
+  );
+  let data: { choices?: { message?: { content?: string | null } }[] };
+  try {
+    data = (await res!.json()) as typeof data;
+  } catch {
+    if (timeout.aborted) throw new AiChatError("Model took too long to respond; try again", 504);
+    throw new AiChatError("AI provider returned an unreadable response", 502);
+  }
+  const content = stripThinking(data.choices?.[0]?.message?.content ?? "");
+  if (!content) throw new AiChatError("AI returned an empty reply; try again", 502);
+  return content;
+}
+
+const MAX_LIST_ITEMS = 15;
+const MAX_ITEM_LENGTH = 120;
+
+/** Cleans one model-written name: strips list markers, markdown emphasis, wrapping quotes, trailing period. */
+export function cleanName(raw: string): string {
+  let text = raw
+    .replace(/\*\*|__|`/g, "")
+    .trim()
+    .replace(/^(\d+[.)]|[-*•]|step\s*\d+\s*[:.)-])\s+/i, "")
+    .replace(/^(goal|vision|name)\s*:\s*/i, "")
+    .trim()
+    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
+    .replace(/\.$/, "")
+    .trim();
+  if (text.length > MAX_ITEM_LENGTH) text = `${text.slice(0, MAX_ITEM_LENGTH - 1).trimEnd()}…`;
+  return text;
+}
+
+/** Turns a numbered or bulleted reply into clean names, ignoring headings and blank lines. */
+export function parseList(text: string): string[] {
+  const lines = stripThinking(text).split("\n");
+  const listLines = lines.filter((line) => /^\s*(\d+[.)]|[-*•])\s+/.test(line));
+  const source = listLines.length > 0 ? listLines : lines;
+  return source
+    .map(cleanName)
+    .filter((name) => name.length > 0 && !name.endsWith(":"))
+    .slice(0, MAX_LIST_ITEMS);
+}
+
+/** Calls onToken for each streamed content delta. Throws AiChatError if the request fails before or during streaming. */
+export async function streamChatCompletion(
+  messages: ChatMessage[],
+  onToken: (token: string) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const res = await postCompletion(
+    { messages, stream: true, max_tokens: MAX_TOKENS, temperature: 0.7 },
+    timeout,
+    signal
+  );
+  if (!res) return;
+
+  const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
 

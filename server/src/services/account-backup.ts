@@ -30,6 +30,7 @@ export async function exportAccountBackup(
     likeCreditLedger,
     likeCredits,
     dailyBonusClaims,
+    aiChats,
   ] = await Promise.all([
     prisma.userReward.findMany({ where: { userId } }),
     prisma.habit.findMany({ where: { userId } }),
@@ -45,6 +46,7 @@ export async function exportAccountBackup(
     prisma.likeCreditLedger.findMany({ where: { userId } }),
     prisma.likeCredit.findMany({ where: { userId } }),
     prisma.dailyBonusClaim.findMany({ where: { userId } }),
+    prisma.aiChat.findMany({ where: { userId } }),
   ]);
 
   return {
@@ -176,6 +178,14 @@ export async function exportAccountBackup(
         rewardLabel: row.rewardLabel,
         createdAt: row.createdAt.toISOString(),
       })),
+      aiChats: aiChats.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        title: row.title,
+        messages: row.messages,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      })),
     },
   };
 }
@@ -224,6 +234,7 @@ async function deleteAllUserData(tx: Prisma.TransactionClient, userId: string) {
   await tx.dailySettings.deleteMany({ where: { userId } });
   await tx.userReward.deleteMany({ where: { userId } });
   await tx.vision.deleteMany({ where: { userId } });
+  await tx.aiChat.deleteMany({ where: { userId } });
 }
 
 export async function importAccountBackup(userId: string, payload: unknown): Promise<void> {
@@ -488,6 +499,20 @@ export async function importAccountBackup(userId: string, payload: unknown): Pro
           tier: row.tier as import("@prisma/client").RewardTier | null,
           rewardLabel: row.rewardLabel,
           createdAt: parseRequiredDate(row.createdAt, "dailyBonusClaim.createdAt"),
+        })),
+      });
+    }
+
+    if (data.aiChats.length > 0) {
+      await tx.aiChat.createMany({
+        data: data.aiChats.map((row) => ({
+          id: row.id,
+          userId,
+          kind: row.kind,
+          title: row.title,
+          messages: row.messages as Prisma.InputJsonValue,
+          createdAt: parseRequiredDate(row.createdAt, "aiChat.createdAt"),
+          updatedAt: parseRequiredDate(row.updatedAt, "aiChat.updatedAt"),
         })),
       });
     }

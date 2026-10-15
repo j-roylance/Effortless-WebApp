@@ -29,6 +29,7 @@ Grep hits for `habit` in old token `source` values are expected.
 | AI prompt text | `client/src/domain/ai-prompts.ts` |
 | AI model calls | `server/src/services/ai-chat.ts` (OpenAI-compatible streaming), `server/src/routes/ai.ts`, `AI_*` env in `server/src/lib/env.ts` |
 | AI chat UI | `client/src/components/AiChatPanel.tsx`, `AiPage`, `apiStream` in `client/src/api/client.ts` |
+| Saved AI chats | `AiChat` model (`kind` vision/goal, `messages` JSON), `/ai/chats` CRUD in `server/src/routes/ai.ts`; revert = PATCH with truncated `messages` |
 | UI screens | `client/src/pages/` |
 | Shared page chrome | `client/src/components/PageHeader.tsx` |
 | Token earn modals | `useRewardQueue`, `RewardModalHost` |
@@ -53,14 +54,14 @@ Grep hits for `habit` in old token `source` values are expected.
 | `/visions` | VisionsPage | `GET /visions` |
 | `/visions/:id/chain` | VisionChainPage | `GET/POST/PATCH /visions/:id/goals` (top-level goals) |
 | `/visions/:id/chain/:goalId` | VisionChainPage | `GET /visions/:id/goals?focus=:goalId` (sub-goals) |
-| `/ai` | AiPage | `GET /ai/status`, `POST /ai/chat` (streams plain text); falls back to client-only prompts when AI is not configured |
+| `/ai` | AiPage | `GET /ai/status`, `POST /ai/chat` (streams plain text), `GET/POST /ai/chats`, `GET/PATCH/DELETE /ai/chats/:id`; falls back to client-only prompts when AI is not configured |
 | `/welcome` | WelcomePage | (signup onboarding only) |
 
 `/welcome` is **outside** `AppShell` (no tab bar). FAB `+` shows on `/` (tasks) and `/visions` only.
 
 ## React Query keys
 
-`["tasks"]`, `["tokens"]`, `["likes"]`, `["visions"]`, `["vision-goals", visionId, chainKey]`, `["daily-settings"]`, `["wheel-config", tier]`, `["ai-status"]`
+`["tasks"]`, `["tokens"]`, `["likes"]`, `["visions"]`, `["vision-goals", visionId, chainKey]`, `["daily-settings"]`, `["wheel-config", tier]`, `["ai-status"]`, `["ai-chats", kind]`, `["ai-chat", id]`
 
 ## Do not commit
 

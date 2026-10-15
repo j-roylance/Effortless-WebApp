@@ -139,3 +139,22 @@ export interface SpinResult {
   winningIndex: number;
   tokenBalances: Record<RewardTier, number>;
 }
+
+export type AiChatKind = "vision" | "goal";
+
+export interface AiChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AiChatSummary {
+  id: string;
+  kind: AiChatKind;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiChat extends AiChatSummary {
+  messages: AiChatMessage[];
+}

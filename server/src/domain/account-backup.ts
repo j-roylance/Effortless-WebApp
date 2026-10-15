@@ -32,6 +32,7 @@ GLOSSARY (UI name → data key → DB model)
 - Like split/combine ledger → data.likeCreditLedger → LikeCreditLedger
 - Like credits (usable instances) → data.likeCredits → LikeCredit
 - Daily bonus claims → data.dailyBonusClaims → DailyBonusClaim
+- AI tab saved chats → data.aiChats → AiChat (kind: "vision"|"goal"; messages: [{ role, content }]; optional, may be absent in older files)
 
 TASK REWARDS
 - Legacy single reward: rewardKind, tier, rewardLikeId, customRewardLabel on each task
@@ -47,7 +48,7 @@ IMPORT ORDER (if rebuilding manually)
 3. goals (parents before children via parentGoalId)
 4. tasks (Habit) — after likes for rewardLikeId FK
 5. dailySettings, wheelConfigs
-6. tokens, spinLogs, likeUsedCounts, tierLikeResets, likeGrantLogs, likeCreditLedger, likeCredits, dailyBonusClaims
+6. tokens, spinLogs, likeUsedCounts, tierLikeResets, likeGrantLogs, likeCreditLedger, likeCredits, dailyBonusClaims, aiChats
 
 DATES: all *At fields are ISO-8601 UTC strings.
 ENUMS: stored as strings matching Prisma enum names (e.g. TaskSection: Must, Should, Could).
@@ -79,6 +80,16 @@ export interface AccountBackupData {
   likeCreditLedger: ExportedLikeCreditLedger[];
   likeCredits: ExportedLikeCredit[];
   dailyBonusClaims: ExportedDailyBonusClaim[];
+  aiChats: ExportedAiChat[];
+}
+
+export interface ExportedAiChat {
+  id: string;
+  kind: string;
+  title: string;
+  messages: unknown;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ExportedLike {
@@ -265,6 +276,7 @@ export function parseBackupFile(value: unknown): AccountBackupFile {
       likeCreditLedger: requireArray("likeCreditLedger") as ExportedLikeCreditLedger[],
       likeCredits: (Array.isArray(data.likeCredits) ? data.likeCredits : []) as ExportedLikeCredit[],
       dailyBonusClaims: requireArray("dailyBonusClaims") as ExportedDailyBonusClaim[],
+      aiChats: (Array.isArray(data.aiChats) ? data.aiChats : []) as ExportedAiChat[],
     },
   };
 }

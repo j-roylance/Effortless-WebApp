@@ -1,13 +1,104 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
+import type { AiChat, AiChatKind, AiChatSummary } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
-import { AiChatPanel, loadAiChat, startAiChat } from "../components/AiChatPanel";
+import { AiChatPanel, EditableTitle } from "../components/AiChatPanel";
 import { buildGoalBreakdownPrompt, buildVisionBreakdownPrompt } from "../domain/ai-prompts";
 
 interface AiStatus {
   enabled: boolean;
   model: string | null;
+}
+
+const OPEN_CHAT_STORAGE_PREFIX = "effortless:aiOpenChat:";
+
+function readOpenChatId(kind: AiChatKind): string | null {
+  try {
+    return sessionStorage.getItem(OPEN_CHAT_STORAGE_PREFIX + kind);
+  } catch {
+    return null;
+  }
+}
+
+function writeOpenChatId(kind: AiChatKind, id: string | null) {
+  try {
+    if (id) sessionStorage.setItem(OPEN_CHAT_STORAGE_PREFIX + kind, id);
+    else sessionStorage.removeItem(OPEN_CHAT_STORAGE_PREFIX + kind);
+  } catch {
+    // Storage unavailable (private mode); the open chat just won't survive a refresh.
+  }
+}
+
+function defaultChatTitle(text: string): string {
+  const firstLine = text.trim().split("\n")[0]!.trim();
+  return firstLine.length > 60 ? `${firstLine.slice(0, 57)}…` : firstLine;
+}
+
+function SavedChatList({
+  kind,
+  onOpen,
+}: {
+  kind: AiChatKind;
+  onOpen: (id: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["ai-chats", kind],
+    queryFn: () => api<{ chats: AiChatSummary[] }>(`/ai/chats?kind=${kind}`),
+  });
+  const chats = data?.chats ?? [];
+  if (chats.length === 0) return null;
+
+  async function rename(id: string, title: string) {
+    await api(`/ai/chats/${id}`, { method: "PATCH", body: JSON.stringify({ title }) });
+    void queryClient.invalidateQueries({ queryKey: ["ai-chats"] });
+    void queryClient.invalidateQueries({ queryKey: ["ai-chat", id] });
+  }
+
+  async function remove(chat: AiChatSummary) {
+    if (!confirm(`Delete "${chat.title}"? This can't be undone.`)) return;
+    await api(`/ai/chats/${chat.id}`, { method: "DELETE" });
+    queryClient.removeQueries({ queryKey: ["ai-chat", chat.id] });
+    void queryClient.invalidateQueries({ queryKey: ["ai-chats"] });
+  }
+
+  return (
+    <div className="ai-saved-chats">
+      <h4 className="ai-saved-chats-title">Saved chats</h4>
+      <ul className="ai-saved-chats-list">
+        {chats.map((chat) => (
+          <li key={chat.id} className="ai-saved-chat">
+            <div className="ai-saved-chat-main">
+              <EditableTitle title={chat.title} onSave={(title) => rename(chat.id, title)} />
+              <span className="ai-saved-chat-date">
+                {new Date(chat.updatedAt).toLocaleString(undefined, {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </span>
+            </div>
+            <div className="ai-saved-chat-actions">
+              <button
+                type="button"
+                className="neon-btn neon-btn-primary neon-btn-sm"
+                onClick={() => onOpen(chat.id)}
+              >
+                Open
+              </button>
+              <button
+                type="button"
+                className="neon-btn neon-btn-sm"
+                onClick={() => void remove(chat)}
+              >
+                Delete
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function PromptOutput({
@@ -36,6 +127,7 @@ function PromptOutput({
 
 function BreakdownSection({
   sectionId,
+  kind,
   title,
   description,
   primaryLabel,
@@ -48,6 +140,7 @@ function BreakdownSection({
   aiEnabled,
 }: {
   sectionId: string;
+  kind: AiChatKind;
   title: string;
   description: string;
   primaryLabel: string;
@@ -63,19 +156,42 @@ function BreakdownSection({
   const [secondary, setSecondary] = useState("");
   const [prompt, setPrompt] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [chatOpen, setChatOpen] = useState(() => loadAiChat(sectionId).length > 0);
-  const [chatSession, setChatSession] = useState(0);
+  const queryClient = useQueryClient();
+  const [openChatId, setOpenChatIdState] = useState<string | null>(() => readOpenChatId(kind));
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+
+  function setOpenChatId(id: string | null) {
+    writeOpenChatId(kind, id);
+    setOpenChatIdState(id);
+  }
 
   function generatePrompt() {
     setPrompt(buildPrompt(primary, secondary));
     setCopied(false);
   }
 
-  function startChat() {
-    startAiChat(sectionId, buildPrompt(primary, secondary));
-    setPrompt(null);
-    setChatSession((n) => n + 1);
-    setChatOpen(true);
+  async function startChat() {
+    setStarting(true);
+    setStartError(null);
+    try {
+      const { chat } = await api<{ chat: AiChat }>("/ai/chats", {
+        method: "POST",
+        body: JSON.stringify({
+          kind,
+          title: defaultChatTitle(primary),
+          messages: [{ role: "user", content: buildPrompt(primary, secondary) }],
+        }),
+      });
+      queryClient.setQueryData(["ai-chat", chat.id], { chat });
+      void queryClient.invalidateQueries({ queryKey: ["ai-chats"] });
+      setPrompt(null);
+      setOpenChatId(chat.id);
+    } catch (err) {
+      setStartError((err as Error).message || "Could not start chat");
+    } finally {
+      setStarting(false);
+    }
   }
 
   async function copyPrompt() {
@@ -89,7 +205,7 @@ function BreakdownSection({
     }
   }
 
-  const showChat = aiEnabled && chatOpen;
+  const showChat = aiEnabled && openChatId !== null;
 
   return (
     <section className="ai-section neon-card">
@@ -98,10 +214,10 @@ function BreakdownSection({
 
       {showChat ? (
         <AiChatPanel
-          key={chatSession}
-          storageKey={sectionId}
+          key={openChatId}
+          chatId={openChatId}
           introLabel={introLabel}
-          onClose={() => setChatOpen(false)}
+          onClose={() => setOpenChatId(null)}
         />
       ) : (
         <>
@@ -134,10 +250,10 @@ function BreakdownSection({
               <button
                 type="button"
                 className="neon-btn neon-btn-primary"
-                onClick={startChat}
-                disabled={!primary.trim()}
+                onClick={() => void startChat()}
+                disabled={!primary.trim() || starting}
               >
-                Start chat
+                {starting ? "Starting…" : "Start chat"}
               </button>
               <button type="button" className="neon-btn" onClick={generatePrompt}>
                 Copy prompt instead
@@ -154,7 +270,11 @@ function BreakdownSection({
             </button>
           )}
 
+          {startError && <div className="ai-chat-error">{startError}</div>}
+
           <PromptOutput prompt={prompt} onCopy={copyPrompt} copied={copied} />
+
+          {aiEnabled && <SavedChatList kind={kind} onOpen={setOpenChatId} />}
         </>
       )}
     </section>
@@ -182,6 +302,7 @@ export function AiPage() {
       <div className="ai-sections">
         <BreakdownSection
           sectionId="vision-breakdown"
+          kind="vision"
           title="Vision breakdown"
           description="Break a life vision into a backward chain of goals — from the vision down to the first step you can take."
           primaryLabel="Your vision"
@@ -196,6 +317,7 @@ export function AiPage() {
 
         <BreakdownSection
           sectionId="goal-breakdown"
+          kind="goal"
           title="Goal breakdown"
           description="Break a goal that feels too big into smaller sub-goals through dialogue until they feel actionable."
           primaryLabel="Goal that feels too big"

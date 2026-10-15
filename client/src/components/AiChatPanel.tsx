@@ -1,63 +1,143 @@
 import { useEffect, useRef, useState } from "react";
-import { apiStream } from "../api/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, apiStream } from "../api/client";
+import type { AiChat, AiChatMessage } from "../api/types";
 
-export interface AiChatMessage {
-  role: "user" | "assistant";
-  content: string;
-}
-
-const MAX_MESSAGES = 40;
-const STORAGE_PREFIX = "effortless:aiChat:";
-
-export function loadAiChat(storageKey: string): AiChatMessage[] {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_PREFIX + storageKey);
-    const parsed = raw ? (JSON.parse(raw) as AiChatMessage[]) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveAiChat(storageKey: string, messages: AiChatMessage[]) {
-  if (messages.length === 0) {
-    sessionStorage.removeItem(STORAGE_PREFIX + storageKey);
-  } else {
-    sessionStorage.setItem(STORAGE_PREFIX + storageKey, JSON.stringify(messages));
-  }
-}
-
-export function startAiChat(storageKey: string, prompt: string) {
-  saveAiChat(storageKey, [{ role: "user", content: prompt }]);
-}
+const MAX_MESSAGES_PER_REQUEST = 40;
 
 /** Keeps the opening prompt so the model never loses the task, then the most recent turns. */
 function trimForRequest(messages: AiChatMessage[]): AiChatMessage[] {
-  if (messages.length <= MAX_MESSAGES) return messages;
-  return [messages[0]!, ...messages.slice(-(MAX_MESSAGES - 1))];
+  if (messages.length <= MAX_MESSAGES_PER_REQUEST) return messages;
+  return [messages[0]!, ...messages.slice(-(MAX_MESSAGES_PER_REQUEST - 1))];
+}
+
+export function EditableTitle({
+  title,
+  onSave,
+  className,
+}: {
+  title: string;
+  onSave: (title: string) => Promise<unknown>;
+  className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title);
+  const [saving, setSaving] = useState(false);
+
+  async function commit() {
+    const next = draft.trim();
+    if (!next || next === title) {
+      setEditing(false);
+      setDraft(title);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(next);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className={`ai-chat-title-row ${className ?? ""}`}>
+        <span className="ai-chat-title">{title}</span>
+        <button
+          type="button"
+          className="ai-chat-link-btn"
+          onClick={() => {
+            setDraft(title);
+            setEditing(true);
+          }}
+        >
+          Rename
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className={`ai-chat-title-row ${className ?? ""}`}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void commit();
+      }}
+    >
+      <input
+        className="neon-input ai-chat-title-input"
+        value={draft}
+        maxLength={120}
+        autoFocus
+        disabled={saving}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            setEditing(false);
+            setDraft(title);
+          }
+        }}
+      />
+      <button type="submit" className="neon-btn neon-btn-sm" disabled={saving}>
+        Save
+      </button>
+    </form>
+  );
 }
 
 export function AiChatPanel({
-  storageKey,
+  chatId,
   introLabel,
   onClose,
 }: {
-  storageKey: string;
+  chatId: string;
   introLabel: string;
   onClose: () => void;
 }) {
-  const [messages, setMessages] = useState<AiChatMessage[]>(() => loadAiChat(storageKey));
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["ai-chat", chatId],
+    queryFn: () => api<{ chat: AiChat }>(`/ai/chats/${chatId}`),
+    staleTime: Infinity,
+    retry: false,
+  });
+
+  if (isLoading) return <p className="empty-state">Loading chat…</p>;
+  if (isError || !data) {
+    return (
+      <div className="ai-chat-error">
+        Could not load this chat.{" "}
+        <button type="button" className="neon-btn neon-btn-sm" onClick={onClose}>
+          Back
+        </button>
+      </div>
+    );
+  }
+
+  return <AiChatConversation chat={data.chat} introLabel={introLabel} onClose={onClose} />;
+}
+
+function AiChatConversation({
+  chat,
+  introLabel,
+  onClose,
+}: {
+  chat: AiChat;
+  introLabel: string;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [messages, setMessages] = useState<AiChatMessage[]>(chat.messages);
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
   const listRef = useRef<HTMLDivElement>(null);
 
   const isStreaming = streamingText !== null;
-
-  useEffect(() => {
-    saveAiChat(storageKey, messages);
-  }, [storageKey, messages]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -65,6 +145,38 @@ export function AiChatPanel({
   }, [messages, streamingText]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  function updateCachedChat(patch: Partial<AiChat>) {
+    queryClient.setQueryData<{ chat: AiChat }>(["ai-chat", chat.id], (prev) =>
+      prev ? { chat: { ...prev.chat, ...patch } } : prev
+    );
+  }
+
+  /** Saves are chained so they reach the server in the order they were made. */
+  function persist(next: AiChatMessage[]) {
+    updateCachedChat({ messages: next });
+    saveChainRef.current = saveChainRef.current
+      .then(() =>
+        api(`/ai/chats/${chat.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ messages: next }),
+        })
+      )
+      .then(() => {
+        setSaveError(null);
+        void queryClient.invalidateQueries({ queryKey: ["ai-chats"] });
+      })
+      .catch((err: Error) => setSaveError(err.message || "Could not save chat"));
+  }
+
+  async function renameChat(title: string) {
+    await api(`/ai/chats/${chat.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    });
+    updateCachedChat({ title });
+    void queryClient.invalidateQueries({ queryKey: ["ai-chats"] });
+  }
 
   async function requestReply(history: AiChatMessage[]) {
     abortRef.current?.abort();
@@ -93,7 +205,9 @@ export function AiChatPanel({
         abortRef.current = null;
         setStreamingText(null);
         if (reply.trim()) {
-          setMessages([...history, { role: "assistant", content: reply }]);
+          const next: AiChatMessage[] = [...history, { role: "assistant", content: reply }];
+          setMessages(next);
+          persist(next);
         }
       }
     }
@@ -111,6 +225,7 @@ export function AiChatPanel({
     const next: AiChatMessage[] = [...messages, { role: "user", content: text }];
     setMessages(next);
     setInput("");
+    persist(next);
     void requestReply(next);
   }
 
@@ -118,22 +233,55 @@ export function AiChatPanel({
     if (isStreaming || messages.length === 0) return;
     const last = messages[messages.length - 1]!;
     const history = last.role === "assistant" ? messages.slice(0, -1) : messages;
-    setMessages(history);
+    if (history !== messages) {
+      setMessages(history);
+      persist(history);
+    }
     void requestReply(history);
   }
 
-  function startOver() {
-    if (messages.length > 1 && !confirm("Clear this conversation and start over?")) return;
-    abortRef.current?.abort();
-    setMessages([]);
-    saveAiChat(storageKey, []);
-    onClose();
+  /** Rewinds the chat so the model never sees anything after `keepCount` messages. */
+  function rewindTo(keepCount: number, confirmText: string): boolean {
+    const removed = messages.length - keepCount;
+    if (removed <= 0 || isStreaming) return false;
+    if (!confirm(confirmText.replace("{n}", String(removed)))) return false;
+    const next = messages.slice(0, keepCount);
+    setMessages(next);
+    setError(null);
+    persist(next);
+    return true;
+  }
+
+  function revertToAssistant(index: number) {
+    rewindTo(
+      index + 1,
+      "Revert to this reply? The {n} later message(s) will be removed and the AI won't see them."
+    );
+  }
+
+  function editUserMessage(index: number) {
+    const text = messages[index]!.content;
+    if (
+      rewindTo(
+        index,
+        "Edit this message? It and everything after it ({n} message(s)) will be removed so you can resend."
+      )
+    ) {
+      setInput(text);
+    }
   }
 
   const [intro, ...turns] = messages;
 
   return (
     <div className="ai-chat neon-card">
+      <div className="ai-chat-header">
+        <EditableTitle title={chat.title} onSave={renameChat} />
+        <button type="button" className="neon-btn neon-btn-sm" onClick={onClose}>
+          Close
+        </button>
+      </div>
+
       <div className="ai-chat-list" ref={listRef}>
         {intro && (
           <details className="ai-chat-intro">
@@ -141,14 +289,40 @@ export function AiChatPanel({
             <pre className="ai-prompt-text">{intro.content}</pre>
           </details>
         )}
-        {turns.map((message, index) => (
-          <div key={index} className={`ai-chat-bubble ai-chat-bubble--${message.role}`}>
-            {message.content}
-          </div>
-        ))}
+        {turns.map((message, turnIndex) => {
+          const index = turnIndex + 1;
+          const isLast = index === messages.length - 1;
+          return (
+            <div key={index} className={`ai-chat-turn ai-chat-turn--${message.role}`}>
+              <div className={`ai-chat-bubble ai-chat-bubble--${message.role}`}>
+                {message.content}
+              </div>
+              {!isStreaming && message.role === "assistant" && !isLast && (
+                <button
+                  type="button"
+                  className="ai-chat-link-btn"
+                  onClick={() => revertToAssistant(index)}
+                >
+                  Revert to here
+                </button>
+              )}
+              {!isStreaming && message.role === "user" && (
+                <button
+                  type="button"
+                  className="ai-chat-link-btn"
+                  onClick={() => editUserMessage(index)}
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+          );
+        })}
         {isStreaming && (
-          <div className="ai-chat-bubble ai-chat-bubble--assistant">
-            {streamingText || <span className="ai-chat-typing">Thinking…</span>}
+          <div className="ai-chat-turn ai-chat-turn--assistant">
+            <div className="ai-chat-bubble ai-chat-bubble--assistant">
+              {streamingText || <span className="ai-chat-typing">Thinking…</span>}
+            </div>
           </div>
         )}
         {error && (
@@ -160,6 +334,8 @@ export function AiChatPanel({
           </div>
         )}
       </div>
+
+      {saveError && <div className="ai-chat-error">Not saved: {saveError}</div>}
 
       <div className="ai-chat-input-row">
         <textarea
@@ -193,12 +369,6 @@ export function AiChatPanel({
             Send
           </button>
         )}
-      </div>
-
-      <div className="ai-chat-footer">
-        <button type="button" className="neon-btn neon-btn-sm" onClick={startOver}>
-          Start over
-        </button>
       </div>
     </div>
   );
